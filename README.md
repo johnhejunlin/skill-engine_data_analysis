@@ -58,10 +58,16 @@ engine-data-analysis/
 │   └── engine_analysis.py            # 核心分析模块
 ├── references/
 │   └── etas_inca_signals.md          # ETAS INCA 信号命名规范
-└── 260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx  # B15HE 标准数据（可选）
+└── baseline engine databasse/
+    └── 260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx  # 对标基准数据库
 ```
 
 ## 更新日志
+
+### 2026-06-03 — docs: update file structure for baseline engine database
+- 标准数据文件移入 `baseline engine databasse/` 子目录
+- 同步更新 `_B15HE_STANDARD_PATH` 模块内文件路径
+- README 文件结构更新
 
 ### 2026-06-02 — refactor: 通用化 + 修正值优先 + 标准对比框架
 - 拓宽 skill 描述：燃烧 + 性能 + 油耗 + 增压器（作为子项）
@@ -70,24 +76,18 @@ engine-data-analysis/
 - 新增通用标准对比框架：`load_standard_data()` / `compare_with_standard()`
 - 新增燃烧敏感性分析：`analyze_combustion_sensitivity()`
 - SKILL.md 去除绝对路径（改用 `Path.home()`），重写内容结构
-- CSV 读取修复：表头长度不足时的自动降级
 
 ### 2026-06-02 — feat: add combustion analysis
 - 新增燃烧特性分析：COV/AI50/点火角/点火退角/爆震/VVT/IMEP 信号检测
 - 新增 `single_engine_combustion_analysis()` 燃烧一站式分析
-- 新增 `single_engine_full_analysis()` 性能+燃烧双通道全分析
 - 新增 `_plot_combustion_analysis()` 9 子图燃烧可视化
 - COLUMN_PATTERNS 新增 9 种信号类型
 
 ### 2026-06-02 — feat: add B15HE standard comparison
 - 新增 B15HE 标准数据文件
 - 新增 `compare_with_b15he_standard()` 外特性对比
-- `single_engine_analysis()` 新增 `standard_engine` 参数
 
 ### 2026-06-01 — initial: extract reusable module, slim down SKILL.md
 - 将内联代码提取为 `scripts/engine_analysis.py` 结构化模块
 - SKILL.md 精简 71%（35KB → 10KB）
-- 增压器 7 维度加权评分
-- 高原能力评估
-- 自动列名检测
-- 报告生成
+- 增压器 7 维度加权评分 + 高原能力评估 + 自动列名检测
