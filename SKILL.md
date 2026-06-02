@@ -1,11 +1,11 @@
 ---
 name: engine-data-analysis
-description: Analyze engine performance data (dyno/bench test data) — turbocharger matching, torque/BSFC/boost comparison, high-altitude capability assessment, and data visualization. Use when the user asks about engine performance data, turbocharger comparison, dyno data analysis, or any .xlsx/.csv engine test files.
+description: Analyze engine performance data (dyno/bench test data) — turbocharger matching, torque/BSFC/boost comparison, high-altitude capability assessment, combustion analysis (COV/AI50/spark/knock/VVT), data visualization, and performance report generation. Use when the user asks about engine performance data, turbocharger comparison, dyno data analysis, combustion analysis, or any .xlsx/.csv engine test files.
 ---
 
 # 发动机数据分析
 
-分析发动机台架测试数据（dyno data）—— 增压器匹配对比、扭矩/油耗/增压压力分析、高原能力评估、数据可视化。
+分析发动机台架测试数据（dyno data）—— 增压器匹配对比、扭矩/油耗/增压压力分析、燃烧特性分析（COV/AI50/点火角/爆震/VVT）、高原能力评估、数据可视化。
 
 ## 触发条件
 
@@ -15,6 +15,13 @@ description: Analyze engine performance data (dyno/bench test data) — turbocha
 - 分析 .xlsx / .csv 格式的测试数据
 - 评估高原/高海拔性能
 - BSFC / 燃油消耗率 / 扭矩 / 增压压力 / 排气温度 / 背压
+- **COV / 循环变动 / 燃烧稳定性**
+- **AI50 / CA50 / 燃烧相位**
+- **点火角 / 点火提前角 / 点火退角 / MBT**
+- **爆震 / Knock**
+- **VVT / VCT / 可变气门正时 / 凸轮轴**
+- **IMEP / 平均有效压力**
+- **功率 / 油耗分析 / 万有特性**
 
 ## 快速入口
 
@@ -26,7 +33,7 @@ sys.path.insert(0, "/Users/yangdiandian/.hermes/skills/data-science/engine-data-
 from engine_analysis import *
 ```
 
-### 一站式分析（推荐）
+### A/B 增压器对比分析（推荐）
 
 ```python
 out = full_analysis(
@@ -42,11 +49,90 @@ out = full_analysis(
 print(out["report"])
 ```
 
-### 分步分析
+### 单发动机万有特性分析（非对比场景）
+
+当数据是单台发动机的万有特性（全负荷 + 部分负荷稳态点）时，使用 `single_engine_analysis()`：
+
+```python
+out = single_engine_analysis(
+    filepath="260410-B15HTC万有数据.csv",
+    encoding="gbk",            # CSV 编码（常见gbk/latin-1）
+    header_rows=5,             # 跳过的元数据行数
+    turbo_speed_limit=250000,
+    altitude_m=3000,
+    save_plot="/tmp/engine_analysis.png",
+)
+print(out["report"])
+```
+
+### 燃烧特性分析（功率/油耗/COV/AI50/点火角/爆震/VVT）
+
+当数据包含燃烧相关信号时，使用 `single_engine_full_analysis()` 一站式分析：
+
+```python
+from engine_analysis import *
+
+out = single_engine_full_analysis(
+    filepath="260410-B15HTC万有数据.csv",
+    encoding="gbk",
+    header_rows=5,
+    turbo_speed_limit=250000,
+    altitude_m=3000,
+    save_plot_performance="/tmp/performance.png",
+    save_plot_combustion="/tmp/combustion.png",
+)
+print(out["report"])
+```
+
+也可直接调用 `single_engine_combustion_analysis()`：
+
+```python
+import sys
+sys.path.insert(0, "/Users/yangdiandian/.hermes/skills/data-science/engine-data-analysis/scripts")
+from engine_analysis import *
+
+# 加载数据
+df = load_csv("260410-B15HTC万有数据.csv", encoding="gbk", header_rows=5)
+df = ensure_numeric(df)
+
+# 检测列名
+rpm_col = detect_column(df, "rpm")   # → 'DynoSpeed_Avg'
+torque_col = detect_column(df, "torque")  # → 'DynoTorque_Avg'
+col_map = detect_all_columns(df)     # → {'bsfc': 'BSFC_Avg', 'cov': 'IMEP1CO_Avg', 'ai50': 'AI501_Avg', ...}
+
+# 燃烧特性分析
+out = single_engine_combustion_analysis(
+    df, rpm_col, torque_col, col_map,
+    turbo_speed_limit=250000,
+    altitude_m=3000,
+    save_plot="/tmp/combustion.png",
+)
+print(out["report"])
+```
+
+**自动检测的燃烧信号（有则分析，无则跳过）：**
+
+| 信号 | 列名关键词 | 说明 |
+|-----|-----------|------|
+| COV | `IMEP1CO_Avg`, `cov`, `CoV` | 循环变动系数，<3%稳定，>5%不稳定 |
+| AI50 | `AI501_Avg`, `CA50`, `MFB50` | 燃烧相位，最佳6-12°CA ATDC |
+| 点火角 | `SPK_dgActSpkAdv_Avg` | 实际点火提前角 (°BTDC) |
+| MBT点火角 | `SPK_dgMBTSpkAdv_Avg` | MBT点火角 (°BTDC) |
+| 点火退角 | `SPK_dgDltFromMBT_Avg` | 从MBT退角 (°CA)，退角>5°可能受爆震限制 |
+| 爆震窗口 | `knockWndStrAng_Avg` | 爆震窗口开始角 |
+| VVT | `VVT`, `CamPhs`, `CamPos` | 可变气门正时 |
+| 油耗量 | `Fuel_FuelConsume_Avg` | 燃油消耗量 (kg/h) |
+| IMEP | `IMEP1_Avg`, `IMEP` | 平均有效压力 (bar) |
+
+**注意：** CSV 文件（.csv）用 `load_csv()` 读取，Excel 文件（.xlsx/.xls）用 `load_excel()`。
+
+
+### 分步分析（A/B 对比）
 
 ```python
 # 1. 加载
 df = load_excel("数据.xlsx", sheet_name="Sheet3", skiprows=1)
+# 或 CSV:  df = load_csv("数据.csv", encoding="gbk", header_rows=5)
 df = clean_columns(df)
 df = ensure_numeric(df)
 
@@ -200,6 +286,99 @@ print(wg_efficiency_assessment(wg_values, rpm_values))
 | 15000~30000 rpm | ⚠️ 可接受 |
 | < 15000 rpm | ❌ 高风险 |
 
+## CSV 文件处理（特殊注意事项）
+
+台架数据经常以 CSV 格式输出，常见陷阱：
+
+### 编码问题
+```python
+# 大多数国内台架 CSV 使用 GBK/GB2312 编码
+df = load_csv("数据.csv", encoding="gbk", header_rows=5)
+
+# 如果 GBK 报错，尝试 latin-1（接受任何字节）
+# 但 latin-1 后的中文字段可能乱码，数值不受影响
+```
+
+### 多行表头结构
+典型台架 CSV 有 5~8 行表头信息，结构如下：
+
+| 行号 | 内容 | 说明 |
+|-----|------|------|
+| 1~4 | Logger description, Log period, etc. | 元数据，跳过 |
+| 5 (header) | Time, Time, Time, DynoSpeed_Avg, DynoTorque_Avg, ... | 真正的列名 |
+| 6 (units) | Date, Time, ms, rev/min, Nm, kW, ... | 单位行，跳过 |
+| 7 (type) | Raw, Raw, Raw, Average, Average, ... | 数据类型，跳过 |
+| 8+ | 实际数据 | |
+
+```python
+# 对复杂表头 CSV，正确的读取方式：
+raw = pd.read_csv(filepath, encoding='gbk', header=5)  # row 5 = 列名
+# 或：
+col_names = pd.read_csv(filepath, encoding='gbk', header=None, nrows=1, skiprows=5)
+raw = pd.read_csv(filepath, encoding='gbk', header=5, names=col_names.iloc[0])
+```
+
+### 列名去重
+ETAS INCA 等工具输出的 CSV 可能有多列同名（如 3 个 "Time" 列），pandas 会自动加 `.1` `.2` 后缀：
+```python
+# 前 3 列可能是: Time, Time.1, Time.2 — 对应 Date/Time/ms 信号
+# 从第 4 列（索引3）开始才是真正的台架信号
+df = raw.iloc[:, 3:]  # 跳过前3个时间列
+```
+
+## 单发动机万有特性分析（非 A/B 对比）
+
+当数据只有一台发动机的万有特性数据（非增压器对比场景），分析重点是：
+
+### 典型输出指标
+- **扭矩特性** — 全负荷外特性曲线 + 部分负荷点
+- **BSFC 经济区** — 最低 BSFC 及其对应转速/扭矩、经济区分布
+- **增压器工作线** — 各转速点对应的涡轮转速、检查是否接近限制
+- **WG 开度分布** — 全速段 WG 开度均值，评估匹配效率
+- **增压压力地图** — 转速-扭矩面上的增压压力分布
+- **排气温度** — 最高排温点、是否超出限值
+
+### 单机分析示例
+
+```python
+from engine_analysis import *
+
+# 加载 CSV 数据
+df = load_csv("260410-B15HTC万有数据.csv", encoding="gbk", header_rows=5)
+df = clean_columns(df)
+df = ensure_numeric(df)
+
+# 提取关键信号
+df_clean = pd.DataFrame()
+df_clean['rpm'] = pd.to_numeric(df['DynoSpeed_Avg'], errors='coerce')
+df_clean['torque'] = pd.to_numeric(df['DynoTorque_Avg'], errors='coerce')
+# ... 提取其他信号
+
+# 按转速分组合并稳态点
+df_clean['rpm_group'] = np.round(df_clean['rpm'] / 50) * 50
+summary = df_clean.groupby('rpm_group').agg({
+    'torque': ['mean', 'max'],
+    'bsfc': 'mean',
+    'boost': 'mean',
+    'wg': 'mean',
+    'egt': 'mean',
+    'turbo_speed': 'mean',
+})
+
+# 高原评估
+ha = assess_high_altitude_single(speed_values, rpm_values, altitude_m=3000)
+```
+
+### 评分参考
+
+| 指标 | 优秀 | 良好 | 一般 | 差 |
+|------|------|------|------|----|
+| 最低 BSFC | < 230 g/kWh | 230~250 | 250~270 | > 270 |
+| 涡轮转速余量（海平面） | > 50k rpm | 30k~50k | 15k~30k | < 15k |
+| 低速扭矩（1000rpm） | > 100 Nm | 80~100 | 60~80 | < 60 |
+| WG 高转速开度 | < 30% | 30~50% | 50~70% | > 70% |
+| 最高排温 | < 800°C | 800~850 | 850~900 | > 900°C |
+
 ## 数据清洗要点
 
 ```python
@@ -214,6 +393,7 @@ df = ensure_numeric(df)                                # 转数值类型
 2. **列名含换行符** — `clean_columns()` 自动处理
 3. **数值为 object 类型** — `ensure_numeric()` 自动转换
 4. **合并单元格** — 先 `df.ffill()` 填充
+5. **CSV 多行表头** — 用 `load_csv()` 的 `header_rows` 参数指定跳过行数
 
 ## 标准大气压参考
 
@@ -233,14 +413,26 @@ df = ensure_numeric(df)                                # 转数值类型
 |----------|---------------------|-------------------|
 | 转速 | `rpm` | 转速, rpm, SPEED, EngineSpeed, DynoSpeed |
 | 扭矩 | `torque` | 扭矩, Torque, TORQUE, DynoTorque |
-| BSFC | `bsfc` | BSFC, 燃油消耗率, FuelCOSP |
-| 增压器转速 | `turbo_speed` | 增压器转速, TURBOSPEED, Trbch_N |
-| 增压压力 | `boost` | 增压压力, Boost, BSTC_pActBoostPress, VBOOST, P3 |
-| 排气温度 | `egt` | 排气温度, EGT, T_EXH, EXHT_tMnfdTemp |
-| 排气背压 | `backpressure` | 背压, FT_TACT, P_EXH |
-| WG 开度 | `wg` | WG开度, EWGC_rActlPos |
+| BSFC | `bsfc` | BSFC, 燃油消耗率, FuelCOSP, FB_RATE |
+| 增压器转速 | `turbo_speed` | 增压器转速, TURBOSPEED, Trbch_N, TurboSpeed, turbine |
+| 增压压力 | `boost` | 增压压力, Boost, BSTC_pActBoostPress, VBOOST, P3, P_Intake |
+| 排气温度 | `egt` | 排气温度, EGT, exhaust, T_EXH, EXHT_tMnfdTemp, MEANTEXH |
+| 排气背压 | `backpressure` | 背压, Back, FT_TACT, P_EXH, ExhP_pUpFstCat |
+| WG 开度 | `wg` | WG开度, WG, wastegate, EWGC_rActlPos, EWGC_rPosDsrd, BCEW_rDesWGPos |
 | 进气流量 | `airflow` | 进气流量, AirFlow, AFS_dm |
 | 功率 | `power` | 功率, Power, BrakePower |
+| 进气温度 | `intake_temp` | 进气温度, T_Intake, T_AIR, T_ACS |
+| **COV** | **`cov`** | **COV, IMEPCOV, IMEP1CO, CoV, 循环变动** |
+| **AI50** | **`ai50`** | **AI50, CA50, MFB50, AI501, 燃烧相位** |
+| **点火角** | **`spark_act`** | **SPK_dgActSpkAdv, SPK_dgMainSpkAdv, 点火角, 点火提前角** |
+| **MBT点火角** | **`spark_mbt`** | **SPK_dgMBTSpkAdv, MBT** |
+| **点火退角** | **`spark_delta`** | **SPK_dgDltFromMBT, DltFromMBT, 点火退角** |
+| **爆震** | **`knock`** | **Knock, KNK, knockWnd, 爆震** |
+| **VVT** | **`vvt`** | **VVT, VCT, Cam, CamPhs, 进气门, 排气门** |
+| **油耗量** | **`fuel_flow`** | **Fuel_FuelConsume, FuelMassFlow, 油耗量** |
+| **IMEP** | **`imep`** | **IMEP, 平均有效压力** |
+
+> ⚠️ ETAS INCA 输出的信号名通常带 `_Avg` 后缀（如 `DynoSpeed_Avg`、`BSTC_pActBoostPress_Avg`、`EWGC_rActlPos_Avg`、`EXHT_tMnfdTemp_Avg`、`TURBOSPEED_Avg`、`IMEP1CO_Avg`、`AI501_Avg`、`SPK_dgActSpkAdv_Avg`、`Fuel_FuelConsume_Avg`），列名检测时包含 `_Avg` 也能匹配到
 
 ## CLI 快速调试
 

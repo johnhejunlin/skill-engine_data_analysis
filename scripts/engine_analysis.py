@@ -58,6 +58,20 @@ COLUMN_PATTERNS = {
     "power":   ["功率", "Power", "POWER", "BrakePower"],
     "intake_temp": ["进气温度", "进气歧管温度", "T_Intake", "T_AIR", "T_AIR_IN",
                     "T_ACS"],
+    # 燃烧特性相关
+    "cov":       ["COV", "cov", "IMEPCOV", "IMEP1CO", "CoV", "循环变动"],
+    "ai50":      ["AI50", "CA50", "MFB50", "A50", "a50", "AI501", "燃烧相位"],
+    "spark_act": ["SPK_dgActSpkAdv", "点火角", "点火提前角", "SparkAdv", "SPK",
+                  "SPK_dgMainSpkAdv"],
+    "spark_mbt": ["SPK_dgMBTSpkAdv", "MBT", "MBTSpkAdv", "mbt"],
+    "spark_delta": ["SPK_dgDltFromMBT", "DltFromMBT", "dltFromMBT", "退角",
+                    "点火退角"],
+    "knock":     ["Knock", "KNK", "knock", "爆震", "knockWnd"],
+    "vvt":       ["VVT", "vvt", "VCT", "Cam", "cam", "进气门", "排气门",
+                  "CamPhs", "CamPos"],
+    "fuel_flow": ["Fuel_FuelConsume", "FuelConsume", "FuelMassFlow",
+                  "燃油消耗量", "FuelFlow", "油耗量"],
+    "imep":      ["IMEP", "imep", "Pmi", "平均有效压力"],
 }
 
 # ────────────────────────────────────────────────────────────
@@ -67,6 +81,7 @@ COLUMN_PATTERNS = {
 def load_excel(filepath: str, sheet_name: Optional[str] = None,
                skiprows: int = 0) -> pd.DataFrame:
     """读取 Excel 台架数据，支持自动探测 sheet 名。
+    如果是 .csv 文件，自动转调 load_csv()。
 
     Args:
         filepath: Excel 文件路径
@@ -83,18 +98,69 @@ def load_excel(filepath: str, sheet_name: Optional[str] = None,
     if not p.exists():
         raise FileNotFoundError(f"文件不存在: {filepath}")
 
+    ext = p.suffix.lower()
+    if ext == '.csv':
+        print("检测到 CSV 文件，自动使用 load_csv()")
+        return load_csv(filepath, encoding='gbk', header_rows=0)
+
     xl = pd.ExcelFile(p)
-    print(f"📋 可用 sheet: {xl.sheet_names}")
+    print(f"可用 sheet: {xl.sheet_names}")
 
     if sheet_name is None and len(xl.sheet_names) == 1:
         sheet_name = xl.sheet_names[0]
-        print(f"→ 使用唯一 sheet: {sheet_name}")
+        print(f"使用唯一 sheet: {sheet_name}")
     elif sheet_name is None:
         sheet_name = xl.sheet_names[0]
-        print(f"→ 默认使用第一个 sheet: {sheet_name}")
+        print(f"默认使用第一个 sheet: {sheet_name}")
 
     df = pd.read_excel(xl, sheet_name=sheet_name, skiprows=skiprows)
-    print(f"→ 读取完成: {df.shape[0]} 行 x {df.shape[1]} 列")
+    print(f"读取完成: {df.shape[0]} 行 x {df.shape[1]} 列")
+    return df
+
+
+def load_csv(filepath: str, encoding: str = 'gbk', header_rows: int = 5,
+             skip_time_cols: int = 3) -> pd.DataFrame:
+    """读取台架 CSV 数据 (复杂多行表头, GBK 编码)。
+
+    典型 ETAS INCA 输出的 CSV 有 5~8 行元数据/表头信息：
+      rows 0-4: 元数据 (Logger description, Log period...)
+      row 5:    真正的列名 (Time, DynoSpeed_Avg, ...)
+      row 6:    单位行 (ms, rev/min, Nm, ...)
+      row 7:    数据类型行 (Raw, Average, ...)
+      row 8+:   实际数据
+
+    Args:
+        filepath: CSV 文件路径
+        encoding: 文件编码 (默认 gbk)
+        header_rows: 跳过的元数据行数 (默认 5)
+        skip_time_cols: 跳过前 N 列时间戳列 (默认 3)
+
+    Returns:
+        清洗后的 DataFrame
+    """
+    p = Path(filepath)
+    if not p.exists():
+        raise FileNotFoundError(f"文件不存在: {filepath}")
+
+    print(f"CSV: encoding={encoding}, header_rows={header_rows}")
+
+    # 先读列名行
+    col_df = pd.read_csv(p, encoding=encoding, header=None, nrows=1,
+                         skiprows=header_rows)
+    col_names = col_df.iloc[0].tolist()
+
+    # 用列名读数据
+    df = pd.read_csv(p, encoding=encoding, header=header_rows)
+    df.columns = col_names[:len(df.columns)]
+    df = clean_columns(df)
+
+    # 跳过时间戳列
+    if skip_time_cols > 0:
+        time_cols = df.columns[:skip_time_cols].tolist()
+        df = df.drop(columns=time_cols)
+        print(f"跳过时间戳列: {time_cols}")
+
+    print(f"读取完成: {df.shape[0]} 行 x {df.shape[1]} 列")
     return df
 
 
@@ -1047,7 +1113,796 @@ def print_data_structure(df: pd.DataFrame) -> None:
 
 
 # ────────────────────────────────────────────────────────────
-# CLI 入口 (方便快速调试)
+# 9. 单发动机万有特性分析 (非 A/B 对比)
+# ────────────────────────────────────────────────────────────
+
+def assess_high_altitude_single(turbo_speeds: np.ndarray,
+                                 rpm_values: np.ndarray,
+                                 altitude_m: float = 3000,
+                                 turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT
+                                 ) -> Dict:
+    """评估单台增压器在指定海拔的高原性能。
+
+    Speed_alt = Speed_0 × √(P0 / P_alt)
+    其中 P0 = 101.325 kPa, P_alt 为对应海拔的大气压。
+
+    Args:
+        turbo_speeds: 海平面增压器转速数组 (rpm)
+        rpm_values: 对应转速数组
+        altitude_m: 海拔高度 (米)
+        turbo_speed_limit: 增压器转速限制值
+
+    Returns:
+        Dict 包含高原评估结果
+    """
+    P_alt = calc_altitude_pressure(altitude_m)
+    ratio = np.sqrt(ATM_STANDARD / P_alt)
+    speed_alt = np.array(turbo_speeds) * ratio
+
+    max_speed = np.nanmax(speed_alt)
+    margin = turbo_speed_limit - max_speed
+
+    def safety_label(m):
+        if m > 30000: return "安全"
+        elif m > 15000: return "可接受"
+        else: return "高风险"
+
+    return {
+        "altitude_m": altitude_m,
+        "P_alt_kPa": round(P_alt, 2),
+        "speed_multiplier": round(ratio, 4),
+        "turbo_speed_limit": turbo_speed_limit,
+        "max_speed_alt": round(max_speed),
+        "margin": round(margin),
+        "safety": safety_label(margin),
+    }
+
+
+def single_engine_analysis(filepath: str,
+                           encoding: str = 'gbk',
+                           header_rows: int = 5,
+                           skip_time_cols: int = 3,
+                           turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
+                           altitude_m: Optional[float] = 3000,
+                           save_plot: Optional[str] = None
+                           ) -> Dict:
+    """单发动机万有特性数据分析 (非 A/B 对比场景)。
+
+    分析维度：扭矩特性 / BSFC 经济区 / 增压器工作线 /
+    WG 开度分布 / 增压压力 / 排气温度 / 高原能力。
+
+    Args:
+        filepath: CSV 或 Excel 文件路径
+        encoding: CSV 文件编码 (默认 gbk)
+        header_rows: CSV 跳过表头行数
+        skip_time_cols: CSV 跳过时间戳列数
+        turbo_speed_limit: 增压器转速限制
+        altitude_m: 评估海拔 (米)，None 则跳过
+        save_plot: 图表保存路径，None 则不保存
+
+    Returns:
+        {"summary": ..., "altitude": ..., "report": "..."}
+    """
+    ext = Path(filepath).suffix.lower()
+
+    if ext == '.csv':
+        df = load_csv(filepath, encoding=encoding,
+                      header_rows=header_rows, skip_time_cols=skip_time_cols)
+    else:
+        df = load_excel(filepath)
+    df = ensure_numeric(df)
+
+    # 自动检测关键信号列
+    rpm_col = detect_column(df, "rpm")
+    torque_col = detect_column(df, "torque")
+
+    if rpm_col is None or torque_col is None:
+        print(f"无法自动检测列名，可用列: {df.columns.tolist()}")
+        # 尝试匹配 ETAS INCA 命名
+        for c in df.columns:
+            cl = c.lower()
+            if 'speed' in cl and 'dyno' in cl and rpm_col is None:
+                rpm_col = c
+            if 'torque' in cl and 'dyno' in cl and torque_col is None:
+                torque_col = c
+
+    print(f"转速列: {rpm_col}, 扭矩列: {torque_col}")
+
+    # 提取数据
+    data = {}
+    data['rpm'] = _safe_float(df[rpm_col].values)
+    data['torque'] = _safe_float(df[torque_col].values)
+    mask = (data['rpm'] > 0) & (data['torque'] > 0)
+
+    col_map = detect_all_columns(df)
+    for key in ['bsfc', 'turbo_speed', 'boost', 'egt', 'wg', 'power', 'airflow']:
+        if key in col_map:
+            data[key] = _safe_float(df[col_map[key]].values)
+        else:
+            data[key] = None
+
+    data['power'] = data.get('power') or (
+        (data['torque'] * data['rpm'] / 9549) if (data['torque'] is not None and data['rpm'] is not None) else None
+    )
+
+    rpm = data['rpm'][mask]
+    torque = data['torque'][mask]
+
+    # 关键指标
+    max_tq_idx = np.nanargmax(torque)
+    max_tq = torque[max_tq_idx]
+    max_tq_rpm = rpm[max_tq_idx]
+
+    power_vals = data['power'][mask] if data['power'] is not None else (
+        torque * rpm / 9549
+    )
+    max_pwr_idx = np.nanargmax(power_vals)
+    max_pwr = power_vals[max_pwr_idx]
+    max_pwr_rpm = rpm[max_pwr_idx]
+
+    summary = {
+        "max_torque": (round(max_tq, 1), int(max_tq_rpm)),
+        "max_power": (round(max_pwr, 1), int(max_pwr_rpm)),
+        "max_power_hp": round(max_pwr * 1.341, 1),
+        "data_points": int(mask.sum()),
+        "rpm_range": (int(rpm.min()), int(rpm.max())),
+    }
+
+    if data['bsfc'] is not None:
+        bsfc = data['bsfc'][mask]
+        min_bsfc = np.nanmin(bsfc)
+        min_bsfc_idx = np.nanargmin(bsfc)
+        summary["min_bsfc"] = round(min_bsfc, 1)
+        summary["min_bsfc_at"] = f"{round(bsfc[min_bsfc_idx],1)} g/kWh @ {int(rpm[min_bsfc_idx])} rpm, {round(torque[min_bsfc_idx],1)} Nm"
+    if data['boost'] is not None:
+        boost_vals = data['boost'][mask]
+        summary["max_boost"] = round(np.nanmax(boost_vals), 1)
+    if data['egt'] is not None:
+        egt_vals = data['egt'][mask]
+        summary["max_egt"] = round(np.nanmax(egt_vals))
+    if data['turbo_speed'] is not None:
+        ts_vals = data['turbo_speed'][mask]
+        summary["max_turbo_speed"] = round(np.nanmax(ts_vals))
+        summary["turbo_speed_limit"] = turbo_speed_limit
+
+    altitude_results = None
+    if altitude_m is not None and data['turbo_speed'] is not None:
+        ts_filtered = data['turbo_speed'][mask]
+        rpm_filtered = data['rpm'][mask]
+        altitude_results = assess_high_altitude_single(
+            ts_filtered, rpm_filtered,
+            altitude_m=altitude_m, turbo_speed_limit=turbo_speed_limit,
+        )
+
+    # 构建 report
+    report_parts = [f"发动机万有特性分析报告"]
+    report_parts.append(f"")
+    report_parts.append(f"最大扭矩: {summary['max_torque'][0]} Nm @ {summary['max_torque'][1]} rpm")
+    report_parts.append(f"最大功率: {summary['max_power'][0]} kW ({summary['max_power_hp']} hp) @ {summary['max_power_rpm'][1]} rpm")
+    if 'min_bsfc' in summary:
+        report_parts.append(f"最低BSFC: {summary['min_bsfc']} g/kWh")
+        report_parts.append(f"经济区点: {summary['min_bsfc_at']}")
+    if 'max_boost' in summary:
+        report_parts.append(f"最高增压压力: {summary['max_boost']} kPa")
+    if 'max_egt' in summary:
+        report_parts.append(f"最高排气温度: {summary['max_egt']} C")
+    if 'max_turbo_speed' in summary:
+        report_parts.append(f"最高增压器转速: {summary['max_turbo_speed']} rpm  (限制 {turbo_speed_limit})")
+
+    if altitude_results and 'error' not in altitude_results:
+        report_parts.append(f"")
+        report_parts.append(f"高原评估 ({altitude_m}m):")
+        report_parts.append(f"  放大系数: {altitude_results['speed_multiplier']}x")
+        report_parts.append(f"  预估最高转速: {altitude_results['max_speed_alt']} rpm")
+        report_parts.append(f"  安全余量: {altitude_results['margin']} rpm ({altitude_results['safety']})")
+
+    report = "\n".join(report_parts)
+
+    if save_plot:
+        _plot_single_engine(data, col_map, save_path=save_plot)
+
+    print(report)
+    return {"summary": summary, "altitude": altitude_results, "report": report}
+
+
+def _plot_single_engine(data: Dict, col_map: Dict, save_path: str,
+                        figsize=(18, 10)):
+    """单发动机数据可视化 (内部函数)。"""
+    _setup_chinese_font()
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("matplotlib 未安装，跳过图表")
+        return
+
+    rpm = data['rpm']
+    torque = data['torque']
+    mask = (rpm > 0) & (torque > 0)
+    rpm_m, tq_m = rpm[mask], torque[mask]
+
+    fig, axes = plt.subplots(2, 4, figsize=figsize)
+
+    # 1) Torque-RPM scatter colored by BSFC
+    ax = axes[0, 0]
+    if data['bsfc'] is not None:
+        sc = ax.scatter(rpm_m, tq_m, c=data['bsfc'][mask], cmap='viridis', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='BSFC (g/kWh)')
+    else:
+        ax.scatter(rpm_m, tq_m, s=30, alpha=0.7)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('Torque-RPM (colored by BSFC)'); ax.grid(True, alpha=0.3)
+
+    # 2) Power
+    ax = axes[0, 1]
+    pwr = data['power'] if data['power'] is not None else tq_m * rpm_m / 9549
+    ax.scatter(rpm_m, pwr[mask] if isinstance(pwr, np.ndarray) else pwr, s=20, alpha=0.6)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Power (kW)')
+    ax.set_title('Power'); ax.grid(True, alpha=0.3)
+
+    # 3) BSFC distribution map
+    ax = axes[0, 2]
+    if data['bsfc'] is not None:
+        sc = ax.scatter(rpm_m, tq_m, c=data['bsfc'][mask], cmap='RdYlGn_r', s=40, alpha=0.8)
+        plt.colorbar(sc, ax=ax, label='BSFC (g/kWh)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('BSFC Distribution'); ax.grid(True, alpha=0.3)
+
+    # 4) Boost pressure map
+    ax = axes[0, 3]
+    if data['boost'] is not None:
+        sc = ax.scatter(rpm_m, tq_m, c=data['boost'][mask], cmap='Blues', s=40, alpha=0.8)
+        plt.colorbar(sc, ax=ax, label='Boost (kPa)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('Boost Pressure'); ax.grid(True, alpha=0.3)
+
+    # 5) WG opening
+    ax = axes[1, 0]
+    if data['wg'] is not None:
+        sc = ax.scatter(rpm_m, data['wg'][mask], c=tq_m, cmap='plasma', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='Torque (Nm)')
+        ax.axhline(y=10, color='g', linestyle='--', alpha=0.5, label='Good <10%')
+        ax.axhline(y=20, color='r', linestyle='--', alpha=0.5, label='Warn >20%')
+        ax.legend(fontsize=8)
+    ax.set_xlabel('RPM'); ax.set_ylabel('WG Open (%)')
+    ax.set_title('WG Opening'); ax.grid(True, alpha=0.3)
+
+    # 6) EGT
+    ax = axes[1, 1]
+    if data['egt'] is not None:
+        sc = ax.scatter(rpm_m, data['egt'][mask], c=tq_m, cmap='hot', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='Torque (Nm)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('EGT (C)')
+    ax.set_title('Exhaust Temp'); ax.grid(True, alpha=0.3)
+
+    # 7) Turbo speed
+    ax = axes[1, 2]
+    if data['turbo_speed'] is not None:
+        sc = ax.scatter(rpm_m, data['turbo_speed'][mask], c=tq_m, cmap='viridis', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='Torque (Nm)')
+        limit = TURBO_SPEED_LIMIT_DEFAULT
+        ax.axhline(y=limit, color='r', linestyle='--', alpha=0.5, label=f'Limit {limit}')
+        ax.legend(fontsize=8)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Turbo Speed (rpm)')
+    ax.set_title('Turbocharger Speed'); ax.grid(True, alpha=0.3)
+
+    # 8) Airflow
+    ax = axes[1, 3]
+    if data['airflow'] is not None:
+        sc = ax.scatter(rpm_m, data['airflow'][mask], c=tq_m, cmap='plasma', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='Torque (Nm)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Air Flow (kg/h)')
+    ax.set_title('Intake Air Flow'); ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"Chart saved: {save_path}")
+    plt.close()
+
+
+# ────────────────────────────────────────────────────────────
+# 10. 单发动机燃烧特性分析 (功率/油耗/COV/AI50/点火角/爆震/VVT)
+# ────────────────────────────────────────────────────────────
+
+def _safe_extract(df: pd.DataFrame, col_map: Dict, key: str,
+                  mask: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+    """安全提取列数据，返回 float ndarray 或 None。"""
+    if key not in col_map:
+        return None
+    vals = _safe_float(df[col_map[key]].values)
+    if mask is not None:
+        vals = vals.copy()
+        vals[~mask] = np.nan
+    return vals
+
+
+def single_engine_combustion_analysis(
+    df: pd.DataFrame,
+    rpm_col: str, torque_col: str,
+    col_map: Dict,
+    turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
+    altitude_m: Optional[float] = 3000,
+    save_plot: Optional[str] = None
+) -> Dict:
+    """单发动机燃烧特性全面分析。
+
+    分析维度：
+      - 功率 / BSFC 经济区 / 燃油消耗量
+      - COV (循环变动系数) — 燃烧稳定性
+      - AI50 (CA50) — 燃烧相位
+      - 点火角 (实际 / MBT / 退角)
+      - 爆震窗口
+      - VVT (可变气门正时)
+      - IMEP (平均有效压力)
+      - 增压器高原评估
+
+    Args:
+        df: 清洗后的 DataFrame
+        rpm_col: 转速列名
+        torque_col: 扭矩列名
+        col_map: detect_all_columns() 返回的列名映射
+        turbo_speed_limit: 增压器转速限制
+        altitude_m: 评估海拔 (米)，None 则跳过
+        save_plot: 图表保存路径，None 则不保存
+
+    Returns:
+        Dict 包含 summary, combustion, altitude, report
+    """
+    # 有效点筛选
+    rpm = _safe_float(df[rpm_col].values)
+    torque = _safe_float(df[torque_col].values)
+    power_raw = _safe_extract(df, col_map, "power")
+    mask = (rpm > 0) & (torque > 0)
+
+    rpm_m = rpm[mask]
+    torque_m = torque[mask]
+    power_m = power_raw[mask] if power_raw is not None else (torque_m * rpm_m / 9549)
+
+    # 按转速分组合并
+    rpm_group = np.round(rpm_m / 50) * 50
+    group_data = {"rpm": rpm_m, "torque": torque_m, "power": power_m}
+
+    # 提取各燃烧信号
+    for key in ['bsfc', 'cov', 'ai50', 'spark_act', 'spark_mbt',
+                'spark_delta', 'knock', 'knock', 'vvt', 'fuel_flow',
+                'imep', 'boost', 'egt', 'wg', 'turbo_speed', 'airflow']:
+        vals = _safe_extract(df, col_map, key)
+        group_data[key] = vals[mask] if vals is not None else None
+
+    # ── 关键统计 ──
+    summary = {}
+    summary["data_points"] = int(mask.sum())
+    summary["rpm_range"] = (int(rpm_m.min()), int(rpm_m.max()))
+
+    # 功率
+    max_pwr = np.nanmax(power_m)
+    summary["max_power"] = (round(max_pwr, 1), int(rpm_m[np.nanargmax(power_m)]))
+    summary["max_power_hp"] = round(max_pwr * 1.341, 1)
+
+    # 扭矩
+    max_tq = np.nanmax(torque_m)
+    summary["max_torque"] = (round(max_tq, 1), int(rpm_m[np.nanargmax(torque_m)]))
+
+    # BSFC
+    bsfc = group_data['bsfc']
+    if bsfc is not None:
+        valid = bsfc > 0
+        if valid.any():
+            summary["min_bsfc"] = round(np.nanmin(bsfc[valid]), 1)
+            best_idx = np.nanargmin(bsfc[valid])
+            summary["bsfc_economy_zone"] = (
+                f"{summary['min_bsfc']} g/kWh @ "
+                f"{int(rpm_m[valid][best_idx])} rpm, "
+                f"{round(torque_m[valid][best_idx], 1)} Nm"
+            )
+            # BSFC < 240 的经济区占比
+            economy = (bsfc[valid] < 240) & (bsfc[valid] > 0)
+            summary["bsfc_below_240_ratio"] = f"{economy.sum()}/{valid.sum()} ({economy.sum()/valid.sum()*100:.0f}%)"
+
+    # COV
+    cov = group_data['cov']
+    if cov is not None:
+        cov_valid = cov[(cov > 0) & (cov < 100)]  # 过滤异常值
+        if len(cov_valid) > 0:
+            summary["cov"] = {
+                "min": round(float(cov_valid.min()), 2),
+                "max": round(float(cov_valid.max()), 2),
+                "mean": round(float(cov_valid.mean()), 2),
+                "above_5pct": int((cov_valid > 5).sum()),
+                "above_3pct_lowload": int(
+                    ((cov_valid > 3) & (torque_m[(cov > 0) & (cov < 100)] < 30)).sum()
+                ),
+            }
+
+    # AI50
+    ai50 = group_data['ai50']
+    if ai50 is not None:
+        ai50_valid = ai50[(ai50 > -10) & (ai50 < 60) & (cov_valid if cov is not None else True)]
+        if len(ai50_valid) > 0:
+            optimal = ((ai50_valid >= 6) & (ai50_valid <= 12)).sum()
+            late = (ai50_valid > 15).sum()
+            early = (ai50_valid < 5).sum()
+            summary["ai50"] = {
+                "min": round(float(ai50_valid.min()), 1),
+                "max": round(float(ai50_valid.max()), 1),
+                "mean": round(float(ai50_valid.mean()), 1),
+                "optimal_6_12_ratio": f"{optimal}/{len(ai50_valid)} ({optimal/len(ai50_valid)*100:.0f}%)",
+                "late_gt_15": int(late),
+                "early_lt_5": int(early),
+            }
+
+    # 点火角
+    spark = group_data['spark_act']
+    if spark is not None:
+        spark_valid = spark[(spark > -50) & (spark < 100)]
+        if len(spark_valid) > 0:
+            summary["spark"] = {
+                "min": round(float(spark_valid.min()), 1),
+                "max": round(float(spark_valid.max()), 1),
+                "mean": round(float(spark_valid.mean()), 1),
+            }
+        # 大负荷点火角
+        full_load = torque_m > 150
+        if full_load.any() and spark_valid.any():
+            fl_spark = spark[full_load]
+            summary["spark"]["full_load_mean"] = round(float(np.nanmean(fl_spark)), 1)
+
+    # 点火退角
+    delta = group_data['spark_delta']
+    if delta is not None:
+        delta_valid = delta[(delta >= 0) & (delta < 50)]
+        if len(delta_valid) > 0:
+            summary["spark_delta"] = {
+                "min": round(float(delta_valid.min()), 1),
+                "max": round(float(delta_valid.max()), 1),
+                "mean": round(float(delta_valid.mean()), 1),
+                "gt_5_retarded": int((delta_valid > 5).sum()),
+            }
+
+    # 增压器 / 高原
+    if group_data['turbo_speed'] is not None:
+        ts = group_data['turbo_speed']
+        summary["max_turbo_speed"] = round(float(np.nanmax(ts)))
+        summary["turbo_speed_limit"] = turbo_speed_limit
+
+    altitude_results = None
+    if altitude_m is not None and group_data['turbo_speed'] is not None:
+        ts_valid = group_data['turbo_speed'][group_data['turbo_speed'] > 0]
+        rpm_valid = group_data['rpm'][group_data['turbo_speed'] > 0]
+        if len(ts_valid) > 0:
+            altitude_results = assess_high_altitude_single(
+                ts_valid, rpm_valid,
+                altitude_m=altitude_m, turbo_speed_limit=turbo_speed_limit,
+            )
+
+    # ── 报告 ──
+    report = _build_combustion_report(summary, altitude_results, altitude_m)
+    print(report)
+
+    if save_plot:
+        _plot_combustion_analysis(group_data, save_path=save_plot)
+
+    return {
+        "summary": summary,
+        "altitude": altitude_results,
+        "report": report,
+        "group_data": group_data,
+    }
+
+
+def _build_combustion_report(summary: Dict,
+                              altitude_results: Optional[Dict] = None,
+                              altitude_m: Optional[float] = None) -> str:
+    """生成燃烧特性分析报告。"""
+    lines = []
+    _w = lines.append
+
+    _w("## 🔥 发动机燃烧特性分析报告")
+    _w("")
+
+    # 基本性能
+    _w("### 📊 基本性能")
+    _w(f"有效数据点: {summary.get('data_points', '-')}")
+    _w(f"转速范围: {summary.get('rpm_range', ('-','-'))[0]} - {summary.get('rpm_range', ('-','-'))[1]} rpm")
+    _w("")
+
+    _w("| 指标 | 数值 |")
+    _w("|------|------|")
+    _w(f"| 最大扭矩 | {summary.get('max_torque', ('-',''))[0]} Nm @ {summary.get('max_torque', ('','-'))[1]} rpm |")
+    _w(f"| 最大功率 | {summary.get('max_power', ('-',''))[0]} kW ({summary.get('max_power_hp', '-')} hp) @ {summary.get('max_power', ('','-'))[1]} rpm |")
+    if 'min_bsfc' in summary:
+        _w(f"| 最低BSFC | {summary['min_bsfc']} g/kWh |")
+    if 'bsfc_economy_zone' in summary:
+        _w(f"| 经济区 | {summary['bsfc_economy_zone']} |")
+    if 'bsfc_below_240_ratio' in summary:
+        _w(f"| BSFC<240占比 | {summary['bsfc_below_240_ratio']} |")
+    if 'max_turbo_speed' in summary:
+        _w(f"| 最高增压器转速 | {summary['max_turbo_speed']:,} rpm (限制 {summary.get('turbo_speed_limit','-')}) |")
+
+    # COV
+    if 'cov' in summary:
+        c = summary['cov']
+        _w("")
+        _w("### 🔄 COV 循环变动系数")
+        _w(f"| 指标 | 数值 |")
+        _w(f"|------|------|")
+        _w(f"| 范围 | {c['min']}% – {c['max']}% |")
+        _w(f"| 均值 | {c['mean']}% |")
+        _w(f"| COV > 5% (不稳定) | {c['above_5pct']} 点 |")
+        _w(f"| 低负荷 COV>3% | {c['above_3pct_lowload']} 点 |")
+        if c['above_5pct'] > 0:
+            _w("> ⚠️ 存在燃烧不稳定点，需关注")
+        else:
+            _w("> ✅ 全工况燃烧稳定")
+
+    # AI50
+    if 'ai50' in summary:
+        a = summary['ai50']
+        _w("")
+        _w("### 🔥 AI50 (CA50) 燃烧相位")
+        _w(f"| 指标 | 数值 |")
+        _w(f"|------|------|")
+        _w(f"| 范围 | {a['min']}° – {a['max']}° CA ATDC |")
+        _w(f"| 均值 | {a['mean']}° CA ATDC |")
+        _w(f"| 最佳区间 6-12° | {a['optimal_6_12_ratio']} |")
+        _w(f"| 燃烧过迟 >15° | {a['late_gt_15']} 点 |")
+        _w(f"| 燃烧过早 <5° | {a['early_lt_5']} 点 |")
+        if a['late_gt_15'] > len([1 for _ in range(len(str(a['late_gt_15'])))]) * 10:
+            _w("> ⚠️ 大量工况燃烧相位偏晚，影响热效率")
+
+    # 点火角
+    if 'spark' in summary:
+        s = summary['spark']
+        _w("")
+        _w("### ⚡ 点火角")
+        _w(f"| 指标 | 数值 |")
+        _w(f"|------|------|")
+        _w(f"| 实际点火角范围 | {s['min']}° – {s['max']}° BTDC |")
+        _w(f"| 实际点火角均值 | {s['mean']}° BTDC |")
+        if 'full_load_mean' in s:
+            _w(f"| 大负荷(>150Nm)均值 | {s['full_load_mean']}° BTDC |")
+
+    if 'spark_delta' in summary:
+        d = summary['spark_delta']
+        _w("")
+        _w("### ⚡ 点火退角 (MBT差值)")
+        _w(f"| 指标 | 数值 |")
+        _w(f"|------|------|")
+        _w(f"| 范围 | {d['min']}° – {d['max']}° |")
+        _w(f"| 均值 | {d['mean']}° |")
+        _w(f"| 退角 >5° (受爆震限制) | {d['gt_5_retarded']} 点 |")
+        if d['gt_5_retarded'] > 10:
+            _w("> 🔥 大量点存在明显退角，ECU受爆震限制标定偏保守")
+
+    # 高原
+    if altitude_results and 'error' not in altitude_results:
+        _w("")
+        _w(f"### 🏔️ 高原能力评估 ({altitude_m}m)")
+        _w(f"| 指标 | 数值 |")
+        _w(f"|------|------|")
+        _w(f"| 预计最高增压器转速 | {altitude_results.get('max_speed_alt', '-'):,} rpm |")
+        _w(f"| 安全余量 | {altitude_results.get('margin', '-')} rpm |")
+        _w(f"| 安全性 | {altitude_results.get('safety', '-')} |")
+        _w(f"| 转速放大系数 | {altitude_results.get('speed_multiplier', '-')}x |")
+
+    _w("")
+    _w("### 💡 综合建议")
+    if 'bsfc' in summary:
+        _w(f"- 最佳经济区: 控制 AI50 在 6-12°CA ATDC, BSFC 可低于 240 g/kWh")
+    if 'spark_delta' in summary and summary['spark_delta'].get('gt_5_retarded', 0) > 10:
+        _w(f"- 点火退角过大点较多 ({summary['spark_delta']['gt_5_retarded']}点)，建议检查爆震传感器标定")
+    if altitude_results and 'error' not in altitude_results:
+        if '高风险' in altitude_results.get('safety', ''):
+            _w(f"- ⚠️ 高原存在超速风险，需确认 ECU 降扭策略")
+
+    return "\n".join(lines)
+
+
+def _plot_combustion_analysis(group_data: Dict, save_path: str,
+                               figsize=(18, 16)):
+    """燃烧特性可视化 (9子图)。"""
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("matplotlib 未安装，跳过图表")
+        return
+
+    _setup_chinese_font()
+    rpm = group_data['rpm']
+    torque = group_data['torque']
+
+    fig, axes = plt.subplots(3, 3, figsize=figsize)
+
+    # 1. Power
+    ax = axes[0, 0]
+    if group_data['power'] is not None:
+        ax.scatter(rpm, group_data['power'], c=torque, cmap='plasma', s=30, alpha=0.7)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Power (kW)')
+    ax.set_title('Power'); ax.grid(True, alpha=0.3)
+
+    # 2. BSFC map
+    ax = axes[0, 1]
+    if group_data['bsfc'] is not None:
+        sc = ax.scatter(rpm, torque, c=group_data['bsfc'],
+                        cmap='RdYlGn_r', s=40, alpha=0.8, vmin=220, vmax=400)
+        plt.colorbar(sc, ax=ax, label='BSFC (g/kWh)')
+        best = np.nanargmin(group_data['bsfc'])
+        ax.plot(rpm[best], torque[best], 'r*', markersize=15,
+                label=f"Best {group_data['bsfc'][best]:.0f} g/kWh")
+        ax.legend(fontsize=8)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('BSFC Map'); ax.grid(True, alpha=0.3)
+
+    # 3. COV map
+    ax = axes[0, 2]
+    if group_data['cov'] is not None:
+        sc = ax.scatter(rpm, torque, c=group_data['cov'],
+                        cmap='RdYlGn_r', s=40, alpha=0.8, vmin=0, vmax=5)
+        plt.colorbar(sc, ax=ax, label='COV (%)')
+        ax.axhline(y=30, color='gray', linestyle=':', alpha=0.5)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('COV - Combustion Stability'); ax.grid(True, alpha=0.3)
+
+    # 4. AI50 map
+    ax = axes[1, 0]
+    if group_data['ai50'] is not None:
+        sc = ax.scatter(rpm, torque, c=group_data['ai50'],
+                        cmap='coolwarm', s=40, alpha=0.8, vmin=0, vmax=25)
+        plt.colorbar(sc, ax=ax, label='AI50 (°CA ATDC)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('AI50 (CA50)'); ax.grid(True, alpha=0.3)
+
+    # 5. Spark advance
+    ax = axes[1, 1]
+    if group_data['spark_act'] is not None:
+        sc = ax.scatter(rpm, torque, c=group_data['spark_act'],
+                        cmap='viridis', s=40, alpha=0.8)
+        plt.colorbar(sc, ax=ax, label='Spark Adv (°BTDC)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.set_title('Spark Advance'); ax.grid(True, alpha=0.3)
+
+    # 6. Spark delta from MBT
+    ax = axes[1, 2]
+    if group_data['spark_delta'] is not None:
+        sc = ax.scatter(rpm, torque, c=group_data['spark_delta'],
+                        cmap='Reds', s=40, alpha=0.8)
+        plt.colorbar(sc, ax=ax, label='Delta (°CA)')
+        ax.set_title('Spark Retard from MBT')
+    elif group_data['spark_mbt'] is not None and group_data['spark_act'] is not None:
+        delta = group_data['spark_mbt'] - group_data['spark_act']
+        sc = ax.scatter(rpm, torque, c=delta, cmap='Reds', s=40, alpha=0.8)
+        plt.colorbar(sc, ax=ax, label='Delta (°CA)')
+        ax.set_title('Spark Retard (calc)')
+    ax.set_xlabel('RPM'); ax.set_ylabel('Torque (Nm)')
+    ax.grid(True, alpha=0.3)
+
+    # 7. BSFC vs AI50
+    ax = axes[2, 0]
+    if group_data['ai50'] is not None and group_data['bsfc'] is not None:
+        valid = (group_data['cov'] is None) | (group_data['cov'] < 5) if group_data['cov'] is not None else np.ones_like(rpm, dtype=bool)
+        sc = ax.scatter(group_data['ai50'][valid], group_data['bsfc'][valid],
+                        c=rpm[valid], cmap='viridis', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='RPM')
+    ax.set_xlabel('AI50 (°CA ATDC)'); ax.set_ylabel('BSFC (g/kWh)')
+    ax.set_title('BSFC vs AI50'); ax.grid(True, alpha=0.3)
+
+    # 8. Spark by load level
+    ax = axes[2, 1]
+    if group_data['spark_act'] is not None:
+        load_bins = [(0, 30, 'Low <30Nm'), (30, 80, 'Mid 30-80'),
+                     (80, 140, 'High 80-140'), (140, 999, 'Full >140Nm')]
+        colors = ['blue', 'green', 'orange', 'red']
+        for (lo, hi, label), cl in zip(load_bins, colors):
+            idx = (torque >= lo) & (torque < hi)
+            ax.scatter(rpm[idx], group_data['spark_act'][idx], s=15, alpha=0.6, c=cl, label=label)
+        ax.legend(fontsize=8)
+    ax.set_xlabel('RPM'); ax.set_ylabel('Spark Adv (°BTDC)')
+    ax.set_title('Spark by Load Level'); ax.grid(True, alpha=0.3)
+
+    # 9. COV vs IMEP
+    ax = axes[2, 2]
+    if group_data['imep'] is not None and group_data['cov'] is not None:
+        sc = ax.scatter(group_data['imep'], group_data['cov'],
+                        c=rpm, cmap='viridis', s=30, alpha=0.7)
+        plt.colorbar(sc, ax=ax, label='RPM')
+        ax.axhline(y=3, color='r', linestyle='--', alpha=0.5, label='Stability limit')
+        ax.legend(fontsize=8)
+    ax.set_xlabel('IMEP (bar)'); ax.set_ylabel('COV (%)')
+    ax.set_title('COV vs IMEP'); ax.grid(True, alpha=0.3)
+
+    plt.suptitle('Combustion Characteristics Analysis', fontsize=14)
+    plt.tight_layout()
+    Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(save_path, dpi=150, bbox_inches='tight')
+    print(f"Chart saved: {save_path}")
+    plt.close()
+
+
+# ────────────────────────────────────────────────────────────
+# 11. 一站式单发动机分析 (含燃烧特性)
+# ────────────────────────────────────────────────────────────
+
+def single_engine_full_analysis(
+    filepath: str,
+    encoding: str = 'gbk',
+    header_rows: int = 5,
+    skip_time_cols: int = 3,
+    turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
+    altitude_m: Optional[float] = 3000,
+    save_plot_performance: Optional[str] = None,
+    save_plot_combustion: Optional[str] = None,
+) -> Dict:
+    """一站式单发动机全分析: 性能 + 燃烧特性。
+
+    自动检测并分析:
+      - 性能: 扭矩/功率/BSFC/增压压力/WG开度/排温/涡轮转速
+      - 燃烧: COV/AI50/点火角/点火退角/爆震/VVT/IMEP
+      - 高原: 增压器高原能力评估
+
+    Args:
+        filepath: CSV 或 Excel 文件路径
+        encoding: CSV 编码 (默认 gbk)
+        header_rows: CSV 跳过表头行数
+        skip_time_cols: CSV 跳过时间戳列数
+        turbo_speed_limit: 增压器转速限制
+        altitude_m: 评估海拔 (米)，None 则跳过
+        save_plot_performance: 性能图表保存路径
+        save_plot_combustion: 燃烧特性图表保存路径
+
+    Returns:
+        Dict 包含 performance, combustion, altitude, report
+    """
+    print(f"{'='*60}")
+    print(" 发动机全分析 (性能 + 燃烧特性)")
+    print(f"{'='*60}\n")
+
+    # 加载
+    ext = Path(filepath).suffix.lower()
+    if ext == '.csv':
+        df = load_csv(filepath, encoding=encoding,
+                      header_rows=header_rows, skip_time_cols=skip_time_cols)
+    else:
+        df = load_excel(filepath)
+    df = ensure_numeric(df)
+
+    # 检测列
+    rpm_col = detect_column(df, "rpm")
+    torque_col = detect_column(df, "torque")
+    if rpm_col is None or torque_col is None:
+        raise ValueError(f"无法检测转速/扭矩列。可用列: {df.columns.tolist()}")
+    print(f"转速列: {rpm_col}, 扭矩列: {torque_col}")
+
+    col_map = detect_all_columns(df)
+    col_map['rpm'] = rpm_col
+    col_map['torque'] = torque_col
+    print(f"检测到的列: {col_map}")
+
+    # 燃烧特性分析 (包含性能指标)
+    combustion_out = single_engine_combustion_analysis(
+        df, rpm_col, torque_col, col_map,
+        turbo_speed_limit=turbo_speed_limit,
+        altitude_m=altitude_m,
+        save_plot=save_plot_combustion,
+    )
+
+    # 单独性能分析 + 绘图
+    performance_out = single_engine_analysis(
+        filepath, encoding=encoding,
+        header_rows=header_rows, skip_time_cols=skip_time_cols,
+        turbo_speed_limit=turbo_speed_limit,
+        altitude_m=altitude_m,
+        save_plot=save_plot_performance,
+    )
+
+    return {
+        "performance": performance_out,
+        "combustion": combustion_out,
+        "report": combustion_out["report"],
+    }
+
+
+# ────────────────────────────────────────────────────────────
+# 辅助工具
 # ────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
