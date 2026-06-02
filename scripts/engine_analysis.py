@@ -1164,7 +1164,8 @@ def single_engine_analysis(filepath: str,
                            skip_time_cols: int = 3,
                            turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
                            altitude_m: Optional[float] = 3000,
-                           save_plot: Optional[str] = None
+                           save_plot: Optional[str] = None,
+                           standard_engine: Optional[str] = None
                            ) -> Dict:
     """单发动机万有特性数据分析 (非 A/B 对比场景)。
 
@@ -1179,9 +1180,11 @@ def single_engine_analysis(filepath: str,
         turbo_speed_limit: 增压器转速限制
         altitude_m: 评估海拔 (米)，None 则跳过
         save_plot: 图表保存路径，None 则不保存
+        standard_engine: 标准发动机对标类型，如 "B15HE" (None=不对比)
 
     Returns:
-        {"summary": ..., "altitude": ..., "report": "..."}
+        {"summary": ..., "altitude": ..., "report": "...",
+         "standard_comparison": ...}  # 当 standard_engine 设置时额外返回
     """
     ext = Path(filepath).suffix.lower()
 
@@ -1298,11 +1301,28 @@ def single_engine_analysis(filepath: str,
 
     report = "\n".join(report_parts)
 
+    # 标准发动机对比
+    standard_comparison = None
+    if standard_engine == "B15HE":
+        rpm_arr = data['rpm']
+        torque_arr = data['torque']
+        power_arr = data['power']
+        bsfc_arr = data.get('bsfc')
+        standard_comparison = compare_with_b15he_standard(
+            rpm_arr, torque_arr, power_arr, bsfc_arr,
+        )
+        if standard_comparison and "report" in standard_comparison:
+            report = _append_standard_comparison_to_report(report, standard_comparison)
+            print(standard_comparison.get("report", ""))
+
     if save_plot:
         _plot_single_engine(data, col_map, save_path=save_plot)
 
     print(report)
-    return {"summary": summary, "altitude": altitude_results, "report": report}
+    ret = {"summary": summary, "altitude": altitude_results, "report": report}
+    if standard_comparison is not None:
+        ret["standard_comparison"] = standard_comparison
+    return ret
 
 
 def _plot_single_engine(data: Dict, col_map: Dict, save_path: str,
@@ -1831,6 +1851,7 @@ def single_engine_full_analysis(
     altitude_m: Optional[float] = 3000,
     save_plot_performance: Optional[str] = None,
     save_plot_combustion: Optional[str] = None,
+    standard_engine: Optional[str] = None,
 ) -> Dict:
     """一站式单发动机全分析: 性能 + 燃烧特性。
 
@@ -1838,6 +1859,7 @@ def single_engine_full_analysis(
       - 性能: 扭矩/功率/BSFC/增压压力/WG开度/排温/涡轮转速
       - 燃烧: COV/AI50/点火角/点火退角/爆震/VVT/IMEP
       - 高原: 增压器高原能力评估
+      - 标准对比: 当 standard_engine="B15HE" 时，对比 B15HE 标准数据
 
     Args:
         filepath: CSV 或 Excel 文件路径
@@ -1848,6 +1870,7 @@ def single_engine_full_analysis(
         altitude_m: 评估海拔 (米)，None 则跳过
         save_plot_performance: 性能图表保存路径
         save_plot_combustion: 燃烧特性图表保存路径
+        standard_engine: 标准发动机对标类型，如 "B15HE" (None=不对比)
 
     Returns:
         Dict 包含 performance, combustion, altitude, report
@@ -1892,6 +1915,7 @@ def single_engine_full_analysis(
         turbo_speed_limit=turbo_speed_limit,
         altitude_m=altitude_m,
         save_plot=save_plot_performance,
+        standard_engine=standard_engine,
     )
 
     return {
@@ -1899,6 +1923,273 @@ def single_engine_full_analysis(
         "combustion": combustion_out,
         "report": combustion_out["report"],
     }
+
+
+# ────────────────────────────────────────────────────────────
+# B15HE 标准数据对比
+# ────────────────────────────────────────────────────────────
+
+# B15HE 标准数据文件路径 (SKILL 目录下的 Excel 文件)
+_B15HE_STANDARD_PATH = Path(__file__).parent.parent / "260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx"
+
+# 外特性列索引映射 (0-based)
+_B15HE_WOT_COL_MAP = {
+    "rpm": 4,          # DynoSpeed_Avg
+    "power": 5,        # BrakePower_Avg
+    "torque": 6,       # DynoTorque_Avg
+    "bsfc": 13,        # 油耗率 (BSFC_Avg)
+    "fuel_flow": 12,   # 油耗量 (FuelMassFlowRate_Avg)
+    "修正功率": 8,
+    "修正扭矩": 9,
+}
+
+
+def load_b15he_standard(sheet: str = "外特性") -> Optional[pd.DataFrame]:
+    """加载 B15HE 发动机标准数据。
+
+    Args:
+        sheet: "外特性" (WOT 全负荷曲线) 或 "B15HE万有数据" (万有特性)
+
+    Returns:
+        DataFrame 或 None (文件不存在时)
+    """
+    fp = _B15HE_STANDARD_PATH
+    if not fp.exists():
+        print(f"[WARNING] B15HE 标准数据文件不存在: {fp}")
+        return None
+
+    try:
+        df = pd.read_excel(str(fp), sheet_name=sheet, header=0)
+
+        # 清理列名 (去掉 \\XCP: 1 等后缀)
+        df.columns = [str(c).split("\\")[0].strip() for c in df.columns]
+
+        if sheet == "外特性":
+            # 外特性: row 0 就是数据 (无单位行)
+            return df
+        elif sheet == "B15HE万有数据":
+            # 万有数据: row 0 是单位行，需要跳过
+            # 跳过第一行 (单位) 和后续的空行
+            df = df.iloc[1:].copy()
+            df = df.dropna(how="all")
+            # 数值化关键列
+            rpm_col = df.columns[4]  # DynoSpeed_Avg
+            df[rpm_col] = pd.to_numeric(df[rpm_col], errors="coerce")
+            df = df.dropna(subset=[rpm_col])
+            return df
+        else:
+            raise ValueError(f"未知 sheet: {sheet}")
+    except Exception as e:
+        print(f"[WARNING] 加载 B15HE 标准数据失败 ({sheet}): {e}")
+        return None
+
+
+def _interp_at_rpm(std_rpm, std_val, target_rpm):
+    """对标准数据进行线性插值，获取目标 RPM 点的标准值。"""
+    if std_rpm is None or std_val is None:
+        return None
+    idx = np.searchsorted(std_rpm, target_rpm)
+    if idx <= 0:
+        return float(std_val[0])
+    if idx >= len(std_rpm):
+        return float(std_val[-1])
+    if std_rpm[idx] == std_rpm[idx - 1]:
+        return float(std_val[idx])
+    ratio = (target_rpm - std_rpm[idx - 1]) / (std_rpm[idx] - std_rpm[idx - 1])
+    return float(std_val[idx - 1] + ratio * (std_val[idx] - std_val[idx - 1]))
+
+
+def compare_with_b15he_standard(
+    test_rpm: np.ndarray,
+    test_torque: np.ndarray,
+    test_power: Optional[np.ndarray] = None,
+    test_bsfc: Optional[np.ndarray] = None,
+) -> Dict:
+    """将测试数据的外特性 (WOT) 与 B15HE 标准对比。
+
+    Args:
+        test_rpm: 测试数据转速数组
+        test_torque: 测试数据扭矩数组 (Nm)
+        test_power: 测试数据功率数组 (kW), None 则自动计算
+        test_bsfc: 测试数据 BSFC 数组 (g/kWh), None 则跳过
+
+    Returns:
+        dict: {
+            "standard_rpm": [...],
+            "standard_torque": [...],
+            "standard_power": [...],
+            "standard_bsfc": [...],
+            "comparison_points": [{"rpm":..., "test_torque":..., "std_torque":..., "torque_diff":..., ...}, ...],
+            "summary": {各项对比结论},
+            "report": "文本报告"
+        }
+    """
+    result = {"standard_engine": "B15HE"}
+    std = load_b15he_standard("外特性")
+    if std is None:
+        result["report"] = "[B15HE 标准数据未加载，跳过对比]"
+        return result
+
+    # 提取标准数据
+    std_rpm = pd.to_numeric(std.iloc[:, _B15HE_WOT_COL_MAP["rpm"]], errors="coerce").values
+    std_torque = pd.to_numeric(std.iloc[:, _B15HE_WOT_COL_MAP["torque"]], errors="coerce").values
+    std_power = pd.to_numeric(std.iloc[:, _B15HE_WOT_COL_MAP["power"]], errors="coerce").values
+    std_bsfc = pd.to_numeric(std.iloc[:, _B15HE_WOT_COL_MAP["bsfc"]], errors="coerce").values
+
+    valid_std = ~(np.isnan(std_rpm) | np.isnan(std_torque))
+    std_rpm = std_rpm[valid_std]
+    std_torque = std_torque[valid_std]
+    std_power = std_power[valid_std]
+    std_bsfc = std_bsfc[valid_std]
+
+    result["standard_rpm"] = std_rpm.tolist()
+    result["standard_torque"] = std_torque.tolist()
+    result["standard_power"] = std_power.tolist()
+    result["standard_bsfc"] = std_bsfc.tolist()
+
+    # 排序标准数据 (按 RPM)
+    sort_idx = np.argsort(std_rpm)
+    std_rpm = std_rpm[sort_idx]
+    std_torque = std_torque[sort_idx]
+    std_power = std_power[sort_idx]
+    std_bsfc = std_bsfc[sort_idx]
+
+    # 筛选测试数据
+    mask = (test_rpm > 0) & (test_torque > 0)
+    tr = test_rpm[mask]
+    tt = test_torque[mask]
+    if test_power is not None:
+        tp = test_power[mask]
+    else:
+        tp = tt * tr / 9549
+
+    if test_bsfc is not None:
+        tb = test_bsfc[mask]
+    else:
+        tb = None
+
+    # 对每个测试 RPM 点，查找标准值 (插值)
+    comparison_points = []
+    for i in range(len(tr)):
+        rpm_i = tr[i]
+        std_tq = _interp_at_rpm(std_rpm, std_torque, rpm_i)
+        std_pw = _interp_at_rpm(std_rpm, std_power, rpm_i)
+        std_bsfc_i = _interp_at_rpm(std_rpm, std_bsfc, rpm_i)
+
+        point = {
+            "rpm": round(rpm_i, 0),
+            "test_torque": round(tt[i], 1),
+            "std_torque": round(std_tq, 1) if std_tq is not None else None,
+            "torque_diff": round(tt[i] - std_tq, 1) if std_tq is not None else None,
+            "torque_diff_pct": round((tt[i] - std_tq) / std_tq * 100, 1) if std_tq is not None and std_tq != 0 else None,
+            "test_power": round(tp[i], 1),
+            "std_power": round(std_pw, 1) if std_pw is not None else None,
+            "power_diff": round(tp[i] - std_pw, 1) if std_pw is not None else None,
+        }
+        if tb is not None and std_bsfc_i is not None:
+            point["test_bsfc"] = round(tb[i], 1)
+            point["std_bsfc"] = round(std_bsfc_i, 1)
+            point["bsfc_diff"] = round(tb[i] - std_bsfc_i, 1)
+        comparison_points.append(point)
+
+    result["comparison_points"] = comparison_points
+
+    # ── 总结 ──
+    summary = {}
+    torque_diffs = [p["torque_diff"] for p in comparison_points if p["torque_diff"] is not None]
+    power_diffs = [p["power_diff"] for p in comparison_points if p["power_diff"] is not None]
+
+    if torque_diffs:
+        summary["torque"] = {
+            "mean_diff": round(np.mean(torque_diffs), 1),
+            "max_gain": round(max(torque_diffs), 1),
+            "max_loss": round(min(torque_diffs), 1),
+        }
+        avg_tq_diff_pct = np.mean([p["torque_diff_pct"] for p in comparison_points
+                                    if p["torque_diff_pct"] is not None])
+        summary["torque"]["avg_diff_pct"] = round(avg_tq_diff_pct, 1)
+
+    if power_diffs:
+        summary["power"] = {
+            "mean_diff": round(np.mean(power_diffs), 1),
+            "max_gain": round(max(power_diffs), 1),
+            "max_loss": round(min(power_diffs), 1),
+        }
+
+    # BSFC 对比
+    bsfc_diffs = [p.get("bsfc_diff") for p in comparison_points
+                  if p.get("bsfc_diff") is not None]
+    if bsfc_diffs:
+        summary["bsfc"] = {
+            "mean_diff": round(np.mean(bsfc_diffs), 1),
+            "n_test_lower": sum(1 for d in bsfc_diffs if d < 0),  # 负值 = 测试油耗更低 (更好)
+            "n_test_higher": sum(1 for d in bsfc_diffs if d > 0),  # 正值 = 测试油耗更高 (更差)
+        }
+
+    result["summary"] = summary
+
+    # ── 生成报告 ──
+    lines = [
+        "=" * 60,
+        " B15HE 标准数据对比",
+        "=" * 60,
+        "",
+        "外特性 (WOT) 对比: 测试数据 vs B15HE 标准",
+        "",
+    ]
+    header = f"{'RPM':>8} | {'测试扭矩':>8} | {'标准扭矩':>8} | {'差值':>8} | {'差%':>7} | {'测试功率':>8} | {'标准功率':>8} | {'功率差':>8}"
+    if bsfc_diffs:
+        header += f" | {'测试BSFC':>10} | {'标准BSFC':>10} | {'BSFC差':>9}"
+    lines.append(header)
+
+    lines.append("-" * (80 if not bsfc_diffs else 126))
+    for p in comparison_points:
+        line = f"{p['rpm']:>8.0f} | {p['test_torque']:>8.1f} | {p['std_torque'] or '-':>8} | {p['torque_diff'] or '-':>8} | {p['torque_diff_pct'] or '-':>7}"
+        line += f" | {p['test_power']:>8.1f} | {p['std_power'] or '-':>8} | {p['power_diff'] or '-':>8}"
+        if "test_bsfc" in p and p["test_bsfc"] is not None:
+            line += f" | {p['test_bsfc']:>10.1f} | {p.get('std_bsfc', 0):>10.1f} | {p.get('bsfc_diff', 0):>+9.1f}"
+        lines.append(line)
+
+    lines.append("")
+    lines.append("--- 综合结论 ---")
+    if "torque" in summary:
+        s = summary["torque"]
+        lines.append(f"  扭矩: 平均 {s['mean_diff']:+.1f} Nm ({s['avg_diff_pct']:+.1f}%), "
+                     f"最大增益 {s['max_gain']:+.1f} Nm, 最大损失 {s['max_loss']:+.1f} Nm")
+    if "power" in summary:
+        s = summary["power"]
+        lines.append(f"  功率: 平均 {s['mean_diff']:+.1f} kW, "
+                     f"最大增益 {s['max_gain']:+.1f} kW, 最大损失 {s['max_loss']:+.1f} kW")
+    if "bsfc" in summary:
+        s = summary["bsfc"]
+        lines.append(f"  BSFC: 平均 {s['mean_diff']:+.1f} g/kWh "
+                     f"(负值 = 测试油耗低于标准，更好)")
+        if s["n_test_higher"] > len(bsfc_diffs) * 0.5:
+            lines.append(f"  ⚠️ 注意: 大部分转速点测试油耗高于标准值 (需优化)")
+        elif s["n_test_lower"] > len(bsfc_diffs) * 0.5:
+            lines.append(f"  ✅ 优秀: 大部分转速点测试油耗低于标准值")
+
+    lines.append("")
+
+    result["report"] = "\n".join(lines)
+    return result
+
+
+# ─── 修改 single_engine_analysis 以支持标准对比 ───
+
+# (在函数调用后补充标准对比，通过外层包装函数实现)
+
+
+def _append_standard_comparison_to_report(
+    original_report: str,
+    comparison: Dict,
+) -> str:
+    """将标准对比报告追加到原报告末尾。"""
+    if "report" not in comparison or not comparison["report"]:
+        return original_report
+    if comparison["report"].startswith("[B15HE"):
+        return original_report + "\n" + comparison["report"]
+    return original_report + "\n\n" + comparison["report"]
 
 
 # ────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@
 - **燃烧特性分析** — COV（循环变动系数）/ AI50（CA50 燃烧相位）/ 点火角（实际 / MBT / 退角）/ 爆震窗口 / VVT / IMEP
 - **高原能力评估** — 根据 ISO 2533 标准大气模型推算高原增压器转速，评估安全余量
 - **单发动机万有特性分析** — 全负荷+部分负荷稳态点分析（扭矩/功率/BSFC/增压压力/WG开度/排温/涡轮转速/进气流量）
+- **B15HE 标准数据对标** — 测试数据与 `260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx` 外特性自动对比（扭矩/功率/BSFC 逐点对标）
 - **数据可视化** — 支持性能对比图（6 子图）、燃烧特性图（9 子图）、单机分析图（8 子图）
 - **自动列名检测** — 20+ 种发动机信号自动模糊匹配（支持中文/英文/ETAS INCA 命名）
 
@@ -20,12 +21,13 @@ from engine_analysis import *
 out = full_analysis("数据文件.xlsx", "博马", "奕森", n_points=9)
 print(out["report"])
 
-# 单发动机燃烧分析
+# 单发动机燃烧分析 + B15HE 标准对比
 out = single_engine_full_analysis(
     "260410-B15HTC万有数据.csv",
     encoding="gbk", header_rows=5,
     save_plot_performance="/tmp/performance.png",
     save_plot_combustion="/tmp/combustion.png",
+    standard_engine="B15HE",           # 与 B15HE 标准数据对标
 )
 print(out["report"])
 ```
@@ -45,3 +47,11 @@ rpm / torque / power / BSFC / boost / EGT / turbo_speed / WG / airflow / backpre
 - 新增 `_plot_combustion_analysis()` 9 子图燃烧可视化
 - `COLUMN_PATTERNS` 新增 9 种信号类型（cov/ai50/spark_act/spark_mbt/spark_delta/knock/vvt/fuel_flow/imep）
 - SKILL.md 更新：触发条件、快速入口、列名参考表
+
+### 2026-06-02 — feat: add B15HE standard comparison
+- 新增 `260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx` 标准数据文件
+- 新增 `compare_with_b15he_standard()` 外特性 WOT 对比分析函数
+- 新增 `load_b15he_standard()` 标准数据加载函数（支持外特性/万有数据 sheet）
+- `single_engine_analysis()` 和 `single_engine_full_analysis()` 新增 `standard_engine="B15HE"` 参数
+- 自动逐点对比扭矩/功率/BSFC，生成详细对标报告
+- SKILL.md 新增 B15HE 标准对比专题文档
