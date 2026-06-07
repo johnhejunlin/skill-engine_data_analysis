@@ -1,6 +1,6 @@
 # engine-data-analysis
 
-发动机台架性能数据分析工具集 — Hermes Agent Skill
+发动机台架数据综合分析工具集 — Hermes Agent Skill
 
 ## 功能
 
@@ -9,11 +9,12 @@
 - **高原能力评估** — 根据 ISO 2533 标准大气模型推算高原增压器转速，评估安全余量
 - **单发动机万有特性分析** — 全负荷 + 部分负荷稳态点分析（扭矩/功率/BSFC/增压压力/WG 开度/排温/涡轮转速）
 - **标准数据对标** — 任意发动机标准数据的通用对比框架（支持自定义列映射和外特性/万有特性对标）
-- **燃烧敏感性分析** — 基于随机森林回归，分析各参数对 BSFC 和 COV 的敏感度
 - **数据可视化** — 性能对比图（6 子图）、燃烧特性图（9 子图）、单机分析图（8 子图）
 - **自动列名检测** — 20+ 种发动机信号自动模糊匹配（支持中文/英文/ETAS INCA 命名），扭矩/功率优先使用修正值
 
 ## 快速使用
+
+这个 skill 的核心不是单一脚本命令，而是按发动机台架数据分析场景选择入口：先理解数据结构和列名，再进行 A/B 对比、单发动机综合分析、高原评估或标准数据对标。
 
 ```python
 from pathlib import Path
@@ -21,22 +22,49 @@ import sys
 sys.path.insert(0, str(Path.home() / ".hermes/skills/data-science/engine-data-analysis/scripts"))
 from engine_analysis import *
 
-# 增压器 A/B 对比
-out = full_analysis("对比数据.xlsx", "方案A", "方案B", n_points=9)
-print(out["report"])
+# 1. 先查看数据结构并自动识别信号列
+df = load_excel("发动机台架数据.xlsx", sheet_name="Sheet1", skiprows=0)
+print_data_structure(df)
+cols = detect_all_columns(df)
+print(cols)
 
-# 单发动机燃烧分析
-out = single_engine_full_analysis(
-    "发动机万有数据.csv",
-    encoding="gbk", header_rows=5,
-    save_plot_performance="/tmp/performance.png",
-    save_plot_combustion="/tmp/combustion.png",
+# 2. 增压器/方案 A/B 对比：性能 + BSFC + WG + 排温 + 涡轮转速 + 高原能力
+out = full_analysis(
+    filepath="增压器对比数据.xlsx",
+    name_a="方案A",
+    name_b="方案B",
+    n_points=9,
+    turbo_speed_limit=250000,
+    altitude_m=3000,
+    save_plot="/tmp/turbo_comparison.png",
 )
 print(out["report"])
 
-# 标准数据对比
+# 3. 单发动机综合分析：性能 + 燃烧 + 高原能力 + 可选标准对标
+out = single_engine_full_analysis(
+    filepath="发动机万有数据.csv",
+    encoding="gbk", header_rows=5,
+    turbo_speed_limit=250000,
+    altitude_m=3000,
+    save_plot_performance="/tmp/performance.png",
+    save_plot_combustion="/tmp/combustion.png",
+    standard_engine="B15HE",  # 不需要标准对标时设为 None
+)
+print(out["report"])
+
+# 4. 通用标准数据对标：适合外特性/WOT 标准表
+test_df = load_excel("测试外特性.xlsx")
+test_cols = detect_all_columns(test_df)
 std = load_standard_data("标准数据.xlsx")
-result = compare_with_standard(rpm, torque, power, bsfc, standard_df=std)
+result = compare_with_standard(
+    test_rpm=test_df[test_cols["rpm"]].to_numpy(),
+    test_torque=test_df[test_cols["torque"]].to_numpy(),
+    test_power=test_df[test_cols["power"]].to_numpy() if test_cols["power"] else None,
+    test_bsfc=test_df[test_cols["bsfc"]].to_numpy() if test_cols["bsfc"] else None,
+    standard_df=std,
+    name="测试发动机",
+    standard_name="标准发动机",
+)
 print(result["report"])
 ```
 
@@ -75,6 +103,11 @@ GitHub 仓库：[johnhejunlin/skill-engine_data_analysis](https://github.com/joh
 ### 2026-06-07 — docs: add GitHub publish requirement
 - 记录 skill 的 GitHub 仓库地址
 - 明确每次更新 skill 后需同步更新 README 并上传到 GitHub
+
+### 2026-06-07 — docs: clarify quick usage scope
+- 将 README 定位从“性能数据分析”调整为“台架数据综合分析”
+- 重写快速使用示例，按数据识别、A/B 对比、单发动机综合分析和标准对标组织
+- 移除 README 中尚未在脚本实现的一键燃烧敏感性分析声明
 
 ### 2026-06-03 — docs: update file structure for baseline engine database
 - 标准数据文件移入 `baseline engine database/` 子目录
