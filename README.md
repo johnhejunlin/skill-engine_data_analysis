@@ -81,7 +81,6 @@ print(sens["feature_importance"])
 ```
 
 分析管线：燃烧基线 → Pearson+Spearman+互信息 → Random Forest → RPM/负荷分区 → 偏依赖 → K-Fold 交叉验证 → 报告生成。无 sklearn 时自动回退。输出 markdown 表格报告。
-```
 
 ## 支持的信号
 
@@ -93,7 +92,6 @@ print(sens["feature_importance"])
 
 ## 文件结构
 
-```
 engine-data-analysis/
 ├── SKILL.md                          # Skill 触发条件、入口和核心流程
 ├── README.md                         # 仓库说明
@@ -108,7 +106,6 @@ engine-data-analysis/
 │   ├── etas_inca_signals.md          # ETAS INCA 信号命名规范
 │   ├── workflows.md                  # 场景化分析工作流
 │   └── thresholds_and_formulas.md    # 阈值、公式、CSV 与列名参考
-```
 
 ## 维护与发布
 
