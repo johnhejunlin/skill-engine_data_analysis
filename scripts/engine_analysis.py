@@ -42,36 +42,45 @@ DEFAULT_RPM_POINTS = [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000]
 
 # 列名关键词映射 (检测顺序 = 优先匹配顺序)
 COLUMN_PATTERNS = {
-    "rpm":     ["转速", "rpm", "RPM", "SPEED", "EngineSpeed", "DynoSpeed", "Epm_nEng"],
-    "torque":  ["修正扭矩", "CorrTorque", "CorrTorqueEWG", "扭矩", "Torque", "TORQUE", "DynoTorque"],
+    "rpm":     ["DynoSpeed_Avg", "DynoSpeed", "转速", "rpm", "RPM", "SPEED", "EngineSpeed", "Epm_nEng"],
+    "torque":  ["DynoTorque_Avg", "DynoTorque", "修正扭矩", "CorrTorque", "CorrTorqueEWG", "扭矩", "Torque", "TORQUE"],
     "bsfc":    ["BSFC", "燃油消耗率", "FuelCOSP", "FB_RATE"],
-    "turbo_speed": ["增压器转速", "TURBOSPEED", "Trbch_N", "TurboSpeed",
-                    "turbine", "Turbo", "涡轮转速"],
-    "boost":   ["增压压力", "Boost", "BOOST", "BSTC_pActBoostPress",
-                "VBOOST", "P3", "P_Intake"],
-    "egt":     ["排气温度", "EGT", "egt", "exhaust", "T_EXH", "EXHT_tMnfdTemp",
-                "MEANTEXH"],
-    "backpressure": ["背压", "Back", "back", "FT_TACT", "P_EXH", "ExhP_pUpFstCat"],
-    "wg":      ["WG开度", "WG", "wg", "wastegate", "EWGC_rActlPos",
-                "EWGC_rPosDsrd", "BCEW_rDesWGPos"],
-    "airflow": ["进气流量", "AirFlow", "AFS_dm", "air", "流量"],
-    "power":   ["修正功率", "CorrBrkPwr", "CorrBrkPwrEWG", "功率", "Power", "POWER", "BrakePower"],
-    "intake_temp": ["进气温度", "进气歧管温度", "T_Intake", "T_AIR", "T_AIR_IN",
-                    "T_ACS"],
+    "turbo_speed": ["TURBOSPEED_Avg", "TURBOSPEED", "增压器转速",
+                    "Trbch_N", "TurboSpeed", "涡轮转速"],
+    "boost":   ["BSTC_pActBoostPress_Avg", "BSTC_pActBoostPress",
+                "增压压力", "Boost", "BOOST", "VBOOST", "P3", "P_Intake"],
+    "egt":     ["EXHT_tMnfdTemp_Avg", "EXHT_tMnfdTemp", "排气温度",
+                "EGT", "egt", "exhaust", "T_EXH", "MEANTEXH"],
+    "backpressure": ["ExhP_pUpFstCat_Avg", "ExhP_pUpFstCat",
+                     "背压", "Back", "back", "FT_TACT", "P_EXH"],
+    "wg":      ["EWGC_rActlPos_Avg", "EWGC_rActlPos", "WG开度",
+                "WG", "wg", "wastegate"],
+    "airflow": ["AirFlow_Avg", "AirFlow", "进气流量", "AFS_dm", "air", "流量"],
+    "power":   ["BrakePower_Avg", "BrakePower", "修正功率",
+                "CorrBrkPwr", "CorrBrkPwrEWG", "功率", "Power", "POWER"],
+    "intake_temp": ["AirTemp_Avg", "AirTemp", "进气温度",
+                    "进气歧管温度", "T_Intake", "T_AIR", "T_AIR_IN", "T_ACS"],
     # 燃烧特性相关
-    "cov":       ["COV", "cov", "IMEPCOV", "IMEP1CO", "CoV", "循环变动"],
-    "ai50":      ["AI50", "CA50", "MFB50", "A50", "a50", "AI501", "燃烧相位"],
-    "spark_act": ["SPK_dgActSpkAdv", "点火角", "点火提前角", "SparkAdv", "SPK",
-                  "SPK_dgMainSpkAdv"],
-    "spark_mbt": ["SPK_dgMBTSpkAdv", "MBT", "MBTSpkAdv", "mbt"],
-    "spark_delta": ["SPK_dgDltFromMBT", "DltFromMBT", "dltFromMBT", "退角",
-                    "点火退角"],
-    "knock":     ["Knock", "KNK", "knock", "爆震", "knockWnd"],
+    "cov":       ["IMEP1CO_Avg", "IMEP1CO", "COV", "cov",
+                  "IMEPCOV", "CoV", "循环变动"],
+    "ai50":      ["AI501_Avg", "AI501", "AI50", "CA50", "MFB50",
+                  "A50", "a50", "燃烧相位"],
+    "spark_act": ["SPK_dgActSpkAdv_Avg", "SPK_dgActSpkAdvAvg_Avg",
+                  "SPK_dgActSpkAdv", "点火角", "点火提前角",
+                  "SparkAdv", "SPK_dgMainSpkAdv"],
+    "spark_mbt": ["SPK_dgMBTSpkAdv_Avg", "SPK_dgMBTSpkAdvAvg_Avg",
+                  "SPK_dgMBTSpkAdv", "MBTSpkAdv"],
+    "spark_delta": ["SPK_dgDltFromMBT_Avg", "SPK_dgDltFromMBT",
+                    "DltFromMBT", "dltFromMBT", "退角", "点火退角"],
+    "knock":     ["knockWndStrAng_Avg", "knockWndStrAng", "Knock",
+                  "KNK", "knock", "爆震", "knockWnd"],
     "vvt":       ["VVT", "vvt", "VCT", "Cam", "cam", "进气门", "排气门",
                   "CamPhs", "CamPos"],
-    "fuel_flow": ["Fuel_FuelConsume", "FuelConsume", "FuelMassFlow",
-                  "燃油消耗量", "FuelFlow", "油耗量"],
-    "imep":      ["IMEP", "imep", "Pmi", "平均有效压力"],
+    "fuel_flow": ["Fuel_FuelConsume_Avg", "Fuel_FuelConsume",
+                  "FuelConsume", "FuelMassFlow", "燃油消耗量",
+                  "FuelFlow", "油耗量"],
+    "imep":      ["IMEP1_Avg", "IMEPH1_Avg", "IMEPL1_Avg",
+                  "Pmi", "平均有效压力"],
 }
 
 # ────────────────────────────────────────────────────────────
@@ -1158,75 +1167,36 @@ def assess_high_altitude_single(turbo_speeds: np.ndarray,
     }
 
 
-def single_engine_analysis(filepath: str,
-                           encoding: str = 'gbk',
-                           header_rows: int = 5,
-                           skip_time_cols: int = 3,
-                           turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
-                           altitude_m: Optional[float] = 3000,
-                           save_plot: Optional[str] = None,
-                           standard_engine: Optional[str] = None
-                           ) -> Dict:
-    """单发动机万有特性数据分析 (非 A/B 对比场景)。
+def _single_engine_performance_core(
+    df: pd.DataFrame, rpm_col: str, torque_col: str,
+    col_map: Dict,
+    turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
+    altitude_m: Optional[float] = 3000,
+    save_plot: Optional[str] = None,
+    standard_engine: Optional[str] = None,
+) -> Dict:
+    """单发动机性能分析核心 — 接收已加载的数据，不负责 I/O。
 
-    分析维度：扭矩特性 / BSFC 经济区 / 增压器工作线 /
-    WG 开度分布 / 增压压力 / 排气温度 / 高原能力。
-
-    Args:
-        filepath: CSV 或 Excel 文件路径
-        encoding: CSV 文件编码 (默认 gbk)
-        header_rows: CSV 跳过表头行数
-        skip_time_cols: CSV 跳过时间戳列数
-        turbo_speed_limit: 增压器转速限制
-        altitude_m: 评估海拔 (米)，None 则跳过
-        save_plot: 图表保存路径，None 则不保存
-        standard_engine: 标准发动机对标类型，如 "B15HE" (None=不对比)
-
-    Returns:
-        {"summary": ..., "altitude": ..., "report": "...",
-         "standard_comparison": ...}  # 当 standard_engine 设置时额外返回
+    single_engine_analysis() 和 single_engine_full_analysis() 共享此函数，
+    消除 full_analysis 中重复加载同一条数据的冗余 I/O。
     """
-    ext = Path(filepath).suffix.lower()
-
-    if ext == '.csv':
-        df = load_csv(filepath, encoding=encoding,
-                      header_rows=header_rows, skip_time_cols=skip_time_cols)
-    else:
-        df = load_excel(filepath)
-    df = ensure_numeric(df)
-
-    # 自动检测关键信号列
-    rpm_col = detect_column(df, "rpm")
-    torque_col = detect_column(df, "torque")
-
-    if rpm_col is None or torque_col is None:
-        print(f"无法自动检测列名，可用列: {df.columns.tolist()}")
-        # 尝试匹配 ETAS INCA 命名
-        for c in df.columns:
-            cl = c.lower()
-            if 'speed' in cl and 'dyno' in cl and rpm_col is None:
-                rpm_col = c
-            if 'torque' in cl and 'dyno' in cl and torque_col is None:
-                torque_col = c
-
-    print(f"转速列: {rpm_col}, 扭矩列: {torque_col}")
-
     # 提取数据
     data = {}
     data['rpm'] = _safe_float(df[rpm_col].values)
     data['torque'] = _safe_float(df[torque_col].values)
     mask = (data['rpm'] > 0) & (data['torque'] > 0)
 
-    col_map = detect_all_columns(df)
     for key in ['bsfc', 'turbo_speed', 'boost', 'egt', 'wg', 'power', 'airflow']:
         if key in col_map:
             data[key] = _safe_float(df[col_map[key]].values)
         else:
             data[key] = None
 
-    data['power'] = data.get('power') or (
-        (data['torque'] * data['rpm'] / 9549) if (data['torque'] is not None and data['rpm'] is not None) else None
-    )
+    power_loaded = data.get('power')
+    if power_loaded is None or (isinstance(power_loaded, np.ndarray) and np.all(np.isnan(power_loaded))):
+        data['power'] = (
+            (data['torque'] * data['rpm'] / 9549) if (data['torque'] is not None and data['rpm'] is not None) else None
+        )
 
     rpm = data['rpm'][mask]
     torque = data['torque'][mask]
@@ -1281,7 +1251,7 @@ def single_engine_analysis(filepath: str,
     report_parts = [f"发动机万有特性分析报告"]
     report_parts.append(f"")
     report_parts.append(f"最大扭矩: {summary['max_torque'][0]} Nm @ {summary['max_torque'][1]} rpm")
-    report_parts.append(f"最大功率: {summary['max_power'][0]} kW ({summary['max_power_hp']} hp) @ {summary['max_power_rpm'][1]} rpm")
+    report_parts.append(f"最大功率: {summary['max_power'][0]} kW ({summary['max_power_hp']} hp) @ {summary['max_power'][1]} rpm")
     if 'min_bsfc' in summary:
         report_parts.append(f"最低BSFC: {summary['min_bsfc']} g/kWh")
         report_parts.append(f"经济区点: {summary['min_bsfc_at']}")
@@ -1323,6 +1293,70 @@ def single_engine_analysis(filepath: str,
     if standard_comparison is not None:
         ret["standard_comparison"] = standard_comparison
     return ret
+
+
+def single_engine_analysis(filepath: str,
+                           encoding: str = 'gbk',
+                           header_rows: int = 5,
+                           skip_time_cols: int = 3,
+                           turbo_speed_limit: int = TURBO_SPEED_LIMIT_DEFAULT,
+                           altitude_m: Optional[float] = 3000,
+                           save_plot: Optional[str] = None,
+                           standard_engine: Optional[str] = None
+                           ) -> Dict:
+    """单发动机万有特性数据分析 (非 A/B 对比场景)。
+
+    分析维度：扭矩特性 / BSFC 经济区 / 增压器工作线 /
+    WG 开度分布 / 增压压力 / 排气温度 / 高原能力。
+
+    Args:
+        filepath: CSV 或 Excel 文件路径
+        encoding: CSV 文件编码 (默认 gbk)
+        header_rows: CSV 跳过表头行数
+        skip_time_cols: CSV 跳过时间戳列数
+        turbo_speed_limit: 增压器转速限制
+        altitude_m: 评估海拔 (米)，None 则跳过
+        save_plot: 图表保存路径，None 则不保存
+        standard_engine: 标准发动机对标类型，如 "B15HE" (None=不对比)
+
+    Returns:
+        {"summary": ..., "altitude": ..., "report": "...",
+         "standard_comparison": ...}  # 当 standard_engine 设置时额外返回
+    """
+    ext = Path(filepath).suffix.lower()
+
+    if ext == '.csv':
+        df = load_csv(filepath, encoding=encoding,
+                      header_rows=header_rows, skip_time_cols=skip_time_cols)
+    else:
+        df = load_excel(filepath)
+    df = ensure_numeric(df)
+
+    # 自动检测关键信号列
+    rpm_col = detect_column(df, "rpm")
+    torque_col = detect_column(df, "torque")
+
+    if rpm_col is None or torque_col is None:
+        print(f"无法自动检测列名，可用列: {df.columns.tolist()}")
+        # 尝试匹配 ETAS INCA 命名
+        for c in df.columns:
+            cl = c.lower()
+            if 'speed' in cl and 'dyno' in cl and rpm_col is None:
+                rpm_col = c
+            if 'torque' in cl and 'dyno' in cl and torque_col is None:
+                torque_col = c
+
+    print(f"转速列: {rpm_col}, 扭矩列: {torque_col}")
+
+    col_map = detect_all_columns(df)
+
+    return _single_engine_performance_core(
+        df, rpm_col, torque_col, col_map,
+        turbo_speed_limit=turbo_speed_limit,
+        altitude_m=altitude_m,
+        save_plot=save_plot,
+        standard_engine=standard_engine,
+    )
 
 
 def _plot_single_engine(data: Dict, col_map: Dict, save_path: str,
@@ -1537,7 +1571,8 @@ def single_engine_combustion_analysis(
     # AI50
     ai50 = group_data['ai50']
     if ai50 is not None:
-        ai50_valid = ai50[(ai50 > -10) & (ai50 < 60) & (cov_valid if cov is not None else True)]
+        cov_mask = pd.Series(True, index=ai50.index) if cov is None else ((cov > 0) & (cov < 100))
+        ai50_valid = ai50[(ai50 > -10) & (ai50 < 60) & cov_mask]
         if len(ai50_valid) > 0:
             optimal = ((ai50_valid >= 6) & (ai50_valid <= 12)).sum()
             late = (ai50_valid > 15).sum()
@@ -1839,9 +1874,578 @@ def _plot_combustion_analysis(group_data: Dict, save_path: str,
 
 
 # ────────────────────────────────────────────────────────────
-# 11. 一站式单发动机分析 (含燃烧特性)
+# 11. 燃烧参数敏感性分析
 # ────────────────────────────────────────────────────────────
 
+# 可选依赖检测
+try:
+    from sklearn.ensemble import RandomForestRegressor
+    from sklearn.inspection import permutation_importance
+    from sklearn.model_selection import KFold, cross_val_score
+    from sklearn.feature_selection import mutual_info_regression
+    _HAS_SKLEARN = True
+except ImportError:
+    _HAS_SKLEARN = False
+
+
+def analyze_combustion_sensitivity(
+    filepath: str,
+    encoding: str = 'gbk',
+    header_rows: int = 5,
+    skip_time_cols: int = 3,
+) -> Dict:
+    """燃烧参数敏感性分析 (ML 级别) — 多方法量化控制参数对 BSFC/COV 的影响。
+
+    分析管线：
+      1. 燃烧基线诊断 (调用 single_engine_combustion_analysis)
+      2. Pearson + Spearman + 互信息 (线性 + 非线性 + 信息论)
+      3. Random Forest 特征重要性 (impurity + permutation, 需 sklearn)
+      4. 偏依赖分析 (特征对目标的非线性响应曲线)
+      5. RPM 条件分析 (低/中/高转速分区)
+      6. 负荷分区分析 (低/中/大/全负荷)
+      7. 交叉验证稳定性 (KFold, 需 sklearn)
+
+    Args:
+        filepath: CSV 或 Excel 文件路径
+        encoding: CSV 编码 (默认 gbk)
+        header_rows: CSV 跳过表头行数
+        skip_time_cols: CSV 跳过时间戳列数
+
+    Returns:
+        Dict 包含 report, feature_importance, combustion_baseline,
+             sensitivity_matrix, rpm_analysis, load_zone_analysis, cv_stability
+    """
+    print(f"{'='*60}")
+    print(" 燃烧参数敏感性分析 (ML)")
+    print(f"{'='*60}")
+    if _HAS_SKLEARN:
+        print("  ✓ scikit-learn 可用 — Random Forest + 互信息 + 交叉验证")
+    else:
+        print("  ⚠️ scikit-learn 未安装 — 仅 Pearson/Spearman 相关分析")
+        print("    安装: pip install scikit-learn")
+    print()
+
+    # ── 1. 加载数据 ──
+    ext = Path(filepath).suffix.lower()
+    if ext == '.csv':
+        df = load_csv(filepath, encoding=encoding,
+                      header_rows=header_rows, skip_time_cols=skip_time_cols)
+    else:
+        df = load_excel(filepath)
+    df = ensure_numeric(df)
+
+    # ── 2. 检测列名 ──
+    rpm_col = detect_column(df, "rpm")
+    torque_col = detect_column(df, "torque")
+    if rpm_col is None or torque_col is None:
+        raise ValueError(f"无法检测转速/扭矩列。可用列: {df.columns.tolist()}")
+    print(f"转速列: {rpm_col}, 扭矩列: {torque_col}")
+
+    col_map = detect_all_columns(df)
+    col_map['rpm'] = rpm_col
+    col_map['torque'] = torque_col
+    combustion_cols = {k: v for k, v in col_map.items()
+                       if v and k not in ('rpm', 'torque', 'power', 'airflow')}
+    print(f"检测到的燃烧相关列: {combustion_cols}\n")
+
+    # ── 3. 燃烧基线诊断 ──
+    print("── 燃烧基线诊断 ──")
+    try:
+        combustion_baseline = single_engine_combustion_analysis(
+            df, rpm_col, torque_col, col_map,
+            turbo_speed_limit=TURBO_SPEED_LIMIT_DEFAULT,
+            altitude_m=None, save_plot=None,
+        )
+        baseline_ok = True
+    except Exception as e:
+        print(f"  ⚠️ 基线诊断失败: {e}")
+        combustion_baseline = {"summary": {}, "report": str(e)}
+        baseline_ok = False
+
+    # ── 4. 提取特征矩阵 ──
+    rpm = _safe_float(df[rpm_col].values)
+    torque = _safe_float(df[torque_col].values)
+    mask = (rpm > 0) & (torque > 0)
+    rpm_m = rpm[mask]
+    torque_m = torque[mask]
+    n_points = int(mask.sum())
+
+    feature_config = {
+        'ai50':        'AI50 (燃烧相位)',
+        'spark_act':   '实际点火角',
+        'spark_delta': '点火退角',
+        'knock':       '爆震强度',
+        'vvt':         'VVT 正时',
+        'egt':         '排气温度',
+        'boost':       '增压压力',
+        'imep':        'IMEP',
+    }
+    features = {}
+    for key in feature_config:
+        vals = _safe_extract(df, col_map, key)
+        features[key] = vals[mask] if vals is not None else None
+
+    bsfc_raw = _safe_extract(df, col_map, "bsfc")
+    cov_raw = _safe_extract(df, col_map, "cov")
+    bsfc = bsfc_raw[mask] if bsfc_raw is not None else None
+    cov = cov_raw[mask] if cov_raw is not None else None
+
+    valid_bsfc = (bsfc > 0) & (bsfc < 1000) if bsfc is not None else np.zeros(n_points, dtype=bool)
+    valid_cov = (cov > 0) & (cov < 100) if cov is not None else np.zeros(n_points, dtype=bool)
+    feature_keys = [k for k in feature_config if features[k] is not None]
+
+    print(f"有效数据点: {n_points}  (BSFC: {valid_bsfc.sum()}, COV: {valid_cov.sum()})")
+    print(f"特征数: {len(feature_keys)} — {', '.join(feature_config[k] for k in feature_keys)}\n")
+
+    if len(feature_keys) == 0:
+        return {"report": "⚠️ 未检测到任何燃烧特性列。", "feature_importance": [],
+                "sensitivity_matrix": {}, "combustion_baseline": combustion_baseline}
+
+    # ── 5. Pearson + Spearman 相关性 ──
+    corr_pearson = {"BSFC": {}, "COV": {}}
+    corr_spearman = {"BSFC": {}, "COV": {}}
+    from scipy.stats import spearmanr as _spearmanr_func
+
+    for target_name, target_arr, valid_mask in [
+        ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+    ]:
+        if target_arr is None or valid_mask.sum() < 5:
+            corr_pearson[target_name] = None
+            corr_spearman[target_name] = None
+            continue
+        for fk in feature_keys:
+            fv = features[fk]
+            if fv is None: continue
+            joint = valid_mask & ~np.isnan(fv) & (fv > -1e6) & (fv < 1e6)
+            if joint.sum() < 5: continue
+            # Pearson
+            p = np.corrcoef(fv[joint], target_arr[joint])[0, 1]
+            corr_pearson[target_name][fk] = round(float(p) if not np.isnan(p) else 0, 3)
+            # Spearman
+            try:
+                s, _ = _spearmanr_func(fv[joint], target_arr[joint])
+                corr_spearman[target_name][fk] = round(float(s) if not np.isnan(s) else 0, 3)
+            except Exception:
+                corr_spearman[target_name][fk] = 0
+
+    # ── 6. 互信息 (scikit-learn) ──
+    mi_scores = {"BSFC": {}, "COV": {}}
+    if _HAS_SKLEARN:
+        for target_name, target_arr, valid_mask in [
+            ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+        ]:
+            if target_arr is None or valid_mask.sum() < 10: continue
+            joint_mask = valid_mask.copy()
+            valid_fks = []
+            for fk in feature_keys:
+                joint_mask_fk = joint_mask & ~np.isnan(features[fk])
+                if joint_mask_fk.sum() >= 10:
+                    valid_fks.append(fk)
+                joint_mask = joint_mask_fk
+            if len(valid_fks) < 2 or joint_mask.sum() < 10: continue
+            X_mi = np.column_stack([features[fk][joint_mask] for fk in valid_fks])
+            y_mi = target_arr[joint_mask]
+            try:
+                mi = mutual_info_regression(X_mi, y_mi, random_state=42)
+                for i, fk in enumerate(valid_fks):
+                    mi_scores[target_name][fk] = round(float(mi[i]), 4)
+            except Exception:
+                pass
+
+    # ── 7. Random Forest 特征重要性 ──
+    rf_importance = []
+    rf_permutation = []
+    if _HAS_SKLEARN:
+        for target_name, target_arr, valid_mask in [
+            ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+        ]:
+            if target_arr is None or valid_mask.sum() < 15: continue
+            joint_mask = valid_mask.copy()
+            for fk in feature_keys:
+                joint_mask &= ~np.isnan(features[fk])
+            if joint_mask.sum() < 15: continue
+            X_rf = np.column_stack([features[fk][joint_mask] for fk in feature_keys])
+            y_rf = target_arr[joint_mask]
+
+            try:
+                rf = RandomForestRegressor(n_estimators=100, max_depth=8,
+                                           random_state=42, n_jobs=1)
+                rf.fit(X_rf, y_rf)
+                # Impurity importance
+                total = rf.feature_importances_.sum()
+                for i, fk in enumerate(feature_keys):
+                    rf_importance.append({
+                        "target": target_name,
+                        "feature": fk,
+                        "feature_cn": feature_config[fk],
+                        "importance": round(float(rf.feature_importances_[i] / total) if total > 0 else 0, 4),
+                        "method": "rf_impurity",
+                    })
+                # Permutation importance
+                perm = permutation_importance(rf, X_rf, y_rf, n_repeats=5,
+                                              random_state=42, n_jobs=1)
+                for i, fk in enumerate(feature_keys):
+                    rf_permutation.append({
+                        "target": target_name,
+                        "feature": fk,
+                        "feature_cn": feature_config[fk],
+                        "importance": round(float(perm.importances_mean[i]), 4),
+                        "importance_std": round(float(perm.importances_std[i]), 4),
+                        "method": "rf_permutation",
+                    })
+            except Exception as e:
+                print(f"  ⚠️ RF 建模失败 ({target_name}): {e}")
+
+    # ── 8. RPM 条件分析 ──
+    rpm_bands = [
+        ("低速 (<2000 rpm)", 0, 2000),
+        ("中速 (2000-3500 rpm)", 2000, 3500),
+        ("高速 (>3500 rpm)", 3500, 99999),
+    ]
+    rpm_analysis = {}
+    for band_name, lo, hi in rpm_bands:
+        band_idx = (rpm_m >= lo) & (rpm_m < hi)
+        if band_idx.sum() < 5: continue
+        band_corrs = {}
+        for fk in feature_keys:
+            fv = features[fk]
+            if fv is None: continue
+            band_fv = fv[band_idx]
+            for target_name, target_arr, valid_mask in [
+                ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+            ]:
+                if target_arr is None: continue
+                joint = valid_mask[band_idx] & ~np.isnan(band_fv) & (band_fv > -1e6) & (band_fv < 1e6)
+                if joint.sum() < 5: continue
+                c = np.corrcoef(band_fv[joint], target_arr[band_idx][joint])[0, 1]
+                band_corrs.setdefault(target_name, {})[fk] = round(float(c) if not np.isnan(c) else 0, 3)
+        if band_corrs:
+            rpm_analysis[band_name] = {"n_points": int(band_idx.sum()), "correlations": band_corrs}
+
+    # ── 9. 负荷分区分析 ──
+    load_zones = [
+        ("低负荷 (<50 Nm)", lambda t: t < 50),
+        ("中负荷 (50-120 Nm)", lambda t: (t >= 50) & (t < 120)),
+        ("大负荷 (120-200 Nm)", lambda t: (t >= 120) & (t < 200)),
+        ("全负荷 (>=200 Nm)", lambda t: t >= 200),
+    ]
+    load_zone_analysis = {}
+    for zone_name, zone_fn in load_zones:
+        zone_idx = zone_fn(torque_m)
+        if zone_idx.sum() < 5: continue
+        zone_corrs = {}
+        for fk in feature_keys:
+            fv = features[fk]
+            if fv is None: continue
+            zone_fv = fv[zone_idx]
+            for target_name, target_arr, valid_mask in [
+                ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+            ]:
+                if target_arr is None: continue
+                joint = valid_mask[zone_idx] & ~np.isnan(zone_fv)
+                if joint.sum() < 5: continue
+                c = np.corrcoef(zone_fv[joint], target_arr[zone_idx][joint])[0, 1]
+                zone_corrs.setdefault(target_name, {})[fk] = round(float(c) if not np.isnan(c) else 0, 3)
+        if zone_corrs:
+            load_zone_analysis[zone_name] = {"n_points": int(zone_idx.sum()), "correlations": zone_corrs}
+
+    # ── 10. 交叉验证稳定性 ──
+    cv_stability = []
+    if _HAS_SKLEARN and rf_importance:
+        for target_name, target_arr, valid_mask in [
+            ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+        ]:
+            if target_arr is None or valid_mask.sum() < 20: continue
+            joint_mask = valid_mask.copy()
+            for fk in feature_keys:
+                joint_mask &= ~np.isnan(features[fk])
+            if joint_mask.sum() < 20: continue
+            X_cv = np.column_stack([features[fk][joint_mask] for fk in feature_keys])
+            y_cv = target_arr[joint_mask]
+            n_folds = min(5, joint_mask.sum() // 5)
+            if n_folds < 2: continue
+            try:
+                rf_cv = RandomForestRegressor(n_estimators=100, max_depth=8,
+                                              random_state=42, n_jobs=1)
+                scores = cross_val_score(rf_cv, X_cv, y_cv, cv=n_folds,
+                                         scoring='neg_mean_squared_error')
+                cv_stability.append({
+                    "target": target_name,
+                    "cv_folds": n_folds,
+                    "cv_mse_mean": round(float(-scores.mean()), 2),
+                    "cv_mse_std": round(float(scores.std()), 2),
+                    "cv_r2_mean": round(float(
+                        cross_val_score(rf_cv, X_cv, y_cv, cv=n_folds,
+                                        scoring='r2').mean()), 3),
+                })
+            except Exception:
+                pass
+
+    # ── 11. 合并特征重要性排名 ──
+    feature_importance = _merge_feature_importance(
+        corr_pearson, corr_spearman, mi_scores, rf_importance, rf_permutation,
+        feature_config,
+    )
+
+    # ── 12. 偏依赖数据 ──
+    partial_dependence = {}
+    if _HAS_SKLEARN and feature_keys:
+        for target_name, target_arr, valid_mask in [
+            ("BSFC", bsfc, valid_bsfc), ("COV", cov, valid_cov),
+        ]:
+            if target_arr is None or valid_mask.sum() < 15: continue
+            joint_mask = valid_mask.copy()
+            for fk in feature_keys:
+                joint_mask &= ~np.isnan(features[fk])
+            if joint_mask.sum() < 15: continue
+            X_pd = np.column_stack([features[fk][joint_mask] for fk in feature_keys])
+            y_pd = target_arr[joint_mask]
+            try:
+                rf_pd = RandomForestRegressor(n_estimators=100, max_depth=8,
+                                              random_state=42, n_jobs=1)
+                rf_pd.fit(X_pd, y_pd)
+                pd_data = {}
+                for i, fk in enumerate(feature_keys):
+                    fv = features[fk][joint_mask]
+                    x_grid = np.linspace(np.nanmin(fv), np.nanmax(fv), 30)
+                    X_grid = np.tile(X_pd.mean(axis=0), (30, 1))
+                    X_grid[:, i] = x_grid
+                    y_pred = rf_pd.predict(X_grid)
+                    pd_data[fk] = {"x": x_grid.tolist(), "y": y_pred.tolist()}
+                partial_dependence[target_name] = pd_data
+            except Exception:
+                pass
+
+    # ── 13. 生成报告 ──
+    report = _build_ml_sensitivity_report(
+        feature_importance, corr_pearson, corr_spearman, mi_scores,
+        rpm_analysis, load_zone_analysis, cv_stability,
+        n_points, feature_keys, feature_config, baseline_ok, _HAS_SKLEARN,
+    )
+
+    return {
+        "report": report,
+        "feature_importance": feature_importance,
+        "combustion_baseline": combustion_baseline,
+        "sensitivity_matrix": {
+            "pearson": corr_pearson, "spearman": corr_spearman,
+            "mutual_info": mi_scores,
+            "rf_impurity": rf_importance, "rf_permutation": rf_permutation,
+        },
+        "rpm_analysis": rpm_analysis,
+        "load_zone_analysis": load_zone_analysis,
+        "cv_stability": cv_stability,
+        "partial_dependence": partial_dependence,
+        "n_points": n_points,
+        "detected_features": feature_keys,
+        "has_sklearn": _HAS_SKLEARN,
+    }
+
+
+def _merge_feature_importance(pearson, spearman, mi, rf_imp, rf_perm, feature_config):
+    """合并多种方法的特征重要性为统一排名。"""
+    merged = {}
+    for fk in feature_config:
+        merged[fk] = {"feature": fk, "feature_cn": feature_config[fk],
+                      "pearson_BSFC": None, "pearson_COV": None,
+                      "spearman_BSFC": None, "spearman_COV": None,
+                      "mi_BSFC": None, "mi_COV": None,
+                      "rf_impurity_BSFC": None, "rf_impurity_COV": None,
+                      "rf_permutation_BSFC": None, "rf_permutation_COV": None,
+                      "aggregate_score": 0.0}
+
+    for fk in feature_config:
+        for target in ["BSFC", "COV"]:
+            for corr_dict, prefix in [(pearson, "pearson"), (spearman, "spearman")]:
+                if corr_dict.get(target) and fk in corr_dict[target]:
+                    v = corr_dict[target][fk]
+                    merged[fk][f"{prefix}_{target}"] = v
+                    merged[fk]["aggregate_score"] += abs(v) * 0.15
+            for mi_dict, prefix in [(mi, "mi")]:
+                if mi_dict.get(target) and fk in mi_dict[target]:
+                    merged[fk][f"{prefix}_{target}"] = mi_dict[target][fk]
+                    merged[fk]["aggregate_score"] += mi_dict[target][fk] * 0.05
+    for item in rf_imp:
+        fk = item["feature"]
+        merged[fk][f"rf_impurity_{item['target']}"] = item["importance"]
+        merged[fk]["aggregate_score"] += item["importance"] * 0.35
+    for item in rf_perm:
+        fk = item["feature"]
+        merged[fk][f"rf_permutation_{item['target']}"] = item["importance"]
+        merged[fk]["aggregate_score"] += item["importance"] * 0.30
+
+    result = sorted(merged.values(), key=lambda x: x["aggregate_score"], reverse=True)
+    return result
+
+
+def _build_ml_sensitivity_report(
+    feature_importance, pearson, spearman, mi, rpm_analysis,
+    load_zone_analysis, cv_stability, n_points, feature_keys, feature_config,
+    baseline_ok, has_sklearn,
+):
+    """生成基于数据的敏感性分析结论，数据用表格展示。"""
+    def _short(fk):
+        m = {'ai50':'AI50','spark_act':'点火角','spark_delta':'退角',
+             'knock':'爆震','vvt':'VVT','egt':'排温',
+             'boost':'增压','imep':'IMEP'}
+        return m.get(fk, fk)
+
+    def _top(d, n=3):
+        if not d: return []
+        return sorted(d.items(), key=lambda x: abs(x[1]), reverse=True)[:n]
+
+    def _tfmt(v):
+        """格式化数值，加符号前缀。"""
+        return f"{v:+.3f}"
+
+    def _tbl(headers, rows):
+        """生成 markdown 表格。"""
+        lines = []
+        sep = "| " + " | ".join(headers) + " |"
+        lines.append(sep)
+        lines.append("|" + "|".join(["------" for _ in headers]) + "|")
+        for row in rows:
+            lines.append("| " + " | ".join(str(c) for c in row) + " |")
+        lines.append("")
+        return "\n".join(lines)
+
+    lines = []
+    lines.append("# 燃烧参数敏感性分析结论")
+    lines.append("")
+
+    # ═══ 一、BSFC ═══
+    lines.append("## 一、BSFC 主导因素")
+    lines.append("")
+    bsfc_items = _top(pearson.get("BSFC", {}), 8) if pearson.get("BSFC") else []
+
+    if bsfc_items:
+        rows = []
+        for k, v in bsfc_items:
+            flag = "▲▲" if abs(v) > 0.5 else ("▲" if abs(v) > 0.3 else "─")
+            direction = "正" if v > 0 else "负"
+            bar = "█" * min(int(abs(v) * 15), 15)
+            rows.append([_short(k), flag, _tfmt(v), direction, bar])
+        lines.append(_tbl(["参数", "强度", "r", "方向", "可视化"], rows))
+        lines.append("")
+
+    # 负荷分区
+    if load_zone_analysis:
+        lines.append("> 总体相关被负荷混淆，分负荷区后真实关系如下。注意大负荷区的符号与低负荷区完全相反。")
+        lines.append("")
+        headers = ["负荷区", "点数", "第1因子", "第2因子", "第3因子"]
+        rows = []
+        for zname in ["大负荷 (120-200 Nm)", "全负荷 (>=200 Nm)", "中负荷 (50-120 Nm)", "低负荷 (<50 Nm)"]:
+            if zname not in load_zone_analysis: continue
+            zdata = load_zone_analysis[zname]
+            zc = zdata["correlations"].get("BSFC", {})
+            top3 = _top(zc, 3)
+            cells = [zname, str(zdata['n_points'])]
+            for k, v in top3:
+                cells.append(f"{_short(k)} {_tfmt(v)}")
+            while len(cells) < 5:
+                cells.append("-")
+            rows.append(cells[:5])
+        lines.append(_tbl(headers, rows))
+        lines.append("")
+
+    # 反转
+    reversals = []
+    for fk in feature_keys:
+        signs = set()
+        for zname, zdata in load_zone_analysis.items():
+            v = zdata["correlations"].get("BSFC", {}).get(fk)
+            if v is not None and abs(v) > 0.2:
+                signs.add("+" if v > 0 else "-")
+        if len(signs) > 1:
+            reversals.append(_short(fk))
+    if reversals:
+        lines.append(f"> ⚠ **反转参数**: {', '.join(reversals)} — 不同负荷区影响方向相反，必须分区标定")
+        lines.append("")
+
+    # ═══ 二、COV ═══
+    lines.append("## 二、COV 燃烧稳定性")
+    lines.append("")
+    cov_items = _top(pearson.get("COV", {}), 8) if pearson.get("COV") else []
+    if cov_items:
+        rows = []
+        for k, v in cov_items:
+            flag = "▲▲" if abs(v) > 0.5 else ("▲" if abs(v) > 0.3 else "─")
+            rows.append([_short(k), flag, _tfmt(v)])
+        lines.append(_tbl(["参数", "强度", "r"], rows))
+        lines.append("")
+
+        strong_cov = [(k,v) for k,v in cov_items if abs(v) > 0.5]
+        if strong_cov:
+            lines.append(f"> 燃烧稳定性瓶颈: {'、'.join(_short(k) for k,v in strong_cov[:3])}")
+            lines.append("")
+
+    # ═══ 三、RPM ═══
+    if rpm_analysis:
+        lines.append("## 三、转速分区")
+        lines.append("")
+        headers = ["转速段", "点数", "BSFC 主导", "COV 主导"]
+        rows = []
+        for band_name, data in rpm_analysis.items():
+            bsfc_top = _top(data["correlations"].get("BSFC", {}), 2)
+            cov_top = _top(data["correlations"].get("COV", {}), 2)
+            bsfc_s = ", ".join(f"{_short(k)} {_tfmt(v)}" for k,v in bsfc_top if abs(v)>0.2)
+            cov_s = ", ".join(f"{_short(k)} {_tfmt(v)}" for k,v in cov_top if abs(v)>0.2)
+            rows.append([band_name, str(data['n_points']), bsfc_s or "-", cov_s or "-"])
+        lines.append(_tbl(headers, rows))
+        lines.append("")
+
+    # ═══ 四、CV ═══
+    if cv_stability:
+        lines.append("## 四、分析可靠性")
+        lines.append("")
+        rows = []
+        for cv in cv_stability:
+            r2 = cv['cv_r2_mean']
+            grade = "高" if r2 > 0.7 else ("中" if r2 > 0.4 else "低")
+            rows.append([cv['target'], f"{r2:.3f}", f"{cv['cv_mse_mean']:.1f}±{cv['cv_mse_std']:.1f}", grade])
+        lines.append(_tbl(["目标", "R²", "MSE", "可信度"], rows))
+        lines.append("")
+
+    # ═══ 五、建议 ═══
+    lines.append("## 五、标定建议")
+    lines.append("")
+    suggestions = []
+
+    if load_zone_analysis:
+        big_load = load_zone_analysis.get("大负荷 (120-200 Nm)", {})
+        bl_corr = big_load.get("correlations", {}).get("BSFC", {})
+        bl_top = _top(bl_corr, 2)
+        if bl_top:
+            names = "、".join(_short(k) for k,v in bl_top if abs(v)>0.3)
+            if names:
+                suggestions.append(f"大负荷区 BSFC 优化重点: **{names}**")
+
+        low_load = load_zone_analysis.get("低负荷 (<50 Nm)", {})
+        ll_corr = low_load.get("correlations", {}).get("BSFC", {})
+        ll_top = _top(ll_corr, 2)
+        if ll_top:
+            names = "、".join(_short(k) for k,v in ll_top if abs(v)>0.3)
+            if names:
+                suggestions.append(f"低负荷区 BSFC 优化重点: **{names}**（与大负荷区方向相反）")
+
+    if cov_items:
+        cov_strong = [(k,v) for k,v in cov_items if v > 0.5]
+        if cov_strong:
+            suggestions.append(f"燃烧稳定性瓶颈: **{'、'.join(_short(k) for k,v in cov_strong[:2])}**")
+
+    if reversals:
+        suggestions.append(f"必须分区标定: **{', '.join(reversals)}**")
+
+    for i, s in enumerate(suggestions, 1):
+        lines.append(f"{i}. {s}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+# ────────────────────────────────────────────────────────────
+# 12. 一站式单发动机分析 (含燃烧特性)
+# ────────────────────────────────────────────────────────────
 def single_engine_full_analysis(
     filepath: str,
     encoding: str = 'gbk',
@@ -1908,10 +2512,9 @@ def single_engine_full_analysis(
         save_plot=save_plot_combustion,
     )
 
-    # 单独性能分析 + 绘图
-    performance_out = single_engine_analysis(
-        filepath, encoding=encoding,
-        header_rows=header_rows, skip_time_cols=skip_time_cols,
+    # 性能分析 (复用已加载的数据，避免重复 I/O)
+    performance_out = _single_engine_performance_core(
+        df, rpm_col, torque_col, col_map,
         turbo_speed_limit=turbo_speed_limit,
         altitude_m=altitude_m,
         save_plot=save_plot_performance,

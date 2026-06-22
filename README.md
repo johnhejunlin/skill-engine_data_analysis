@@ -11,6 +11,7 @@
 - **标准数据对标** — 任意发动机标准数据的通用对比框架（支持自定义列映射和外特性/万有特性对标）
 - **数据可视化** — 性能对比图（6 子图）、燃烧特性图（9 子图）、单机分析图（8 子图）
 - **自动列名检测** — 20+ 种发动机信号自动模糊匹配（支持中文/英文/ETAS INCA 命名），扭矩/功率优先使用修正值
+- **燃烧敏感性分析 (ML)** — Pearson + Spearman + 互信息 + Random Forest + 偏依赖 + RPM/负荷分区 + 交叉验证，输出 markdown 表格报告
 
 ## 快速使用
 
@@ -19,7 +20,7 @@
 ```python
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path.home() / ".hermes/skills/data-science/engine-data-analysis/scripts"))
+sys.path.insert(0, str(Path.home() / "AppData/Local/hermes/skills/engineering/engine-data-analysis/scripts"))
 from engine_analysis import *
 
 # 1. 先查看数据结构并自动识别信号列
@@ -68,6 +69,20 @@ result = compare_with_standard(
 print(result["report"])
 ```
 
+### 5. 燃烧敏感性分析 (ML)
+
+```python
+sens = analyze_combustion_sensitivity(
+    filepath="发动机万有数据.csv",
+    encoding="gbk", header_rows=5,
+)
+print(sens["report"])
+print(sens["feature_importance"])
+```
+
+分析管线：燃烧基线 → Pearson+Spearman+互信息 → Random Forest → RPM/负荷分区 → 偏依赖 → K-Fold 交叉验证 → 报告生成。无 sklearn 时自动回退。输出 markdown 表格报告。
+```
+
 ## 支持的信号
 
 | 类型 | 信号 | 检测优先级 |
@@ -83,7 +98,7 @@ engine-data-analysis/
 ├── SKILL.md                          # Skill 触发条件、入口和核心流程
 ├── README.md                         # 仓库说明
 ├── agents/
-│   └── openai.yaml                   # UI 元数据
+│   └── openai.yaml                   # UI 元数据 / 隐式调用配置
 ├── scripts/
 │   └── engine_analysis.py            # 核心分析模块
 ├── assets/
@@ -104,6 +119,14 @@ GitHub 仓库：[johnhejunlin/skill-engine_data_analysis](https://github.com/joh
 - 将最新改动上传到 GitHub 仓库
 
 ## 更新日志
+
+### 2026-06-08 — feat: implement analyze_combustion_sensitivity (ML)
+- 实现 `analyze_combustion_sensitivity()` — 7 步 ML 管线（燃烧基线→Pearson+Spearman+互信息→RF→分区→偏依赖→CV→报告生成），sklearn 可选，无 sklearn 自动回退
+- 新增 `_merge_feature_importance()` 5 方法融合排名、`_build_ml_sensitivity_report()` 数据驱动分析报告（markdown 表格）
+- 修复 `_single_engine_performance_core` numpy `or` 崩溃、`max_power_rpm` KeyError、`_merge_feature_importance` fk 脱循环 bug
+- 更新 `COLUMN_PATTERNS` 修复 ETAS INCA 常见误匹配（turbo_speed/spark_act/spark_mbt/imep/wg）
+- SKILL.md 精简场景选择、输出要求，与 workflows.md 去重
+- README.md 更新路径、功能列表、文件结构
 
 ### 2026-06-07 — refactor: optimize skill structure
 - 精简 `SKILL.md`，保留触发条件、快速入口和核心工作流
