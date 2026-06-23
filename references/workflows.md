@@ -108,7 +108,7 @@ result = compare_with_standard(
 内置基准文件位于：
 
 ```text
-assets/baseline_engine_database/260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx
+assets/baseline_engine_database/baseline_engine_database.sqlite
 ```
 
 单发动机分析中可用：

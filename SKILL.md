@@ -24,8 +24,9 @@ description: Analyze engine dyno/bench test data — combustion characteristics 
 - ETAS INCA 精确列名：`references/etas_inca_signals.md`
 - 场景化工作流与示例：按需读取 `references/workflows.md`
 - 阈值、公式、CSV 处理和列名参考：按需读取 `references/thresholds_and_formulas.md`
-- B15HE 基准数据：`assets/baseline_engine_database/260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx`
+- B15HE 基准数据：`assets/baseline_engine_database/baseline_engine_database.sqlite`
 - 列名检测修复方案：`references/workflows.md`（「常见问题」章节）
+- 增程器功能设计方案（待实施）：`references/rex_design_plan.md`
 
 只在需要对应细节时读取 reference 文件；优先从本文件获得入口和决策路径。
 
@@ -179,6 +180,9 @@ col_map = {
 - 增压压力、排气背压、绝对压力和表压要确认单位和含义，不要混用。
 - CSV 乱码优先尝试 encoding=gbk，失败再尝试 latin-1。
 - 标准数据至少需要转速和扭矩列；功率和 BSFC 缺失时只输出可比维度。
+- **B15HE 对比陷阱**：`single_engine_full_analysis(standard_engine="B15HE")` 会将万有数据全部工况点逐行与 B15HE 外特性对比，低负荷点出现 -90% 级别的无意义偏差。只有各转速的 WOT 最大扭矩点对比才有意义。对用户答复时需明确指出这一点。
+- `knock` 列常误匹配为 `knockWndStrAng_Avg`（爆震窗口起始角），正解是 `KNOC_dgTotalRTDAvg_Avg`（总爆震推迟角）。
+- `vvt` 列常误匹配为 `CHGCTR_rThermalEffVVTOfst_Avg`（热效率 VVT 偏移），正解是 `VVT1_dgCurPosOffs_Avg`（VVT 实际位置）。
 - 输出要求：每次分析必须将所有报告写入同一个时间戳文件夹，禁止分散到多个文件夹。必须保存综合报告 .md，如有敏感性分析则保存敏感性报告 .md。图表为选配（save_plot 参数），不强制生成。答复时给出文件夹路径和文件清单。
 
 ## CLI 快速调试
@@ -187,6 +191,20 @@ col_map = {
 python ~/AppData/Local/hermes/skills/engineering/engine-data-analysis/scripts/engine_analysis.py \
   "数据文件.xlsx" "方案A" "方案B" 9
 ```
+
+## matplotlib 中文设置
+
+生成中文图表前需配置字体。Windows 通常有 `Microsoft YaHei` 和 `SimHei`：
+
+```python
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+plt.rcParams['font.sans-serif'] = ['Microsoft YaHei', 'SimHei', 'DejaVu Sans']
+plt.rcParams['axes.unicode_minus'] = False
+```
+
+`Agg` 后端用于无头环境（sandbox / 服务器），`DejaVu Sans` 作英文 fallback。
 
 ## 输出文件夹管理
 

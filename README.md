@@ -20,7 +20,7 @@
 ```python
 from pathlib import Path
 import sys
-sys.path.insert(0, str(Path.home() / "AppData/Local/hermes/skills/engineering/engine-data-analysis/scripts"))
+sys.path.insert(0, str(Path.home() / "~/hermes/skills/engineering/engine-data-analysis/scripts"))
 from engine_analysis import *
 
 # 1. 先查看数据结构并自动识别信号列
@@ -67,11 +67,8 @@ result = compare_with_standard(
     standard_name="标准发动机",
 )
 print(result["report"])
-```
 
-### 5. 燃烧敏感性分析 (ML)
-
-```python
+# 5. 燃烧敏感性分析 (ML)
 sens = analyze_combustion_sensitivity(
     filepath="发动机万有数据.csv",
     encoding="gbk", header_rows=5,
@@ -81,7 +78,6 @@ print(sens["feature_importance"])
 ```
 
 分析管线：燃烧基线 → Pearson+Spearman+互信息 → Random Forest → RPM/负荷分区 → 偏依赖 → K-Fold 交叉验证 → 报告生成。无 sklearn 时自动回退。输出 markdown 表格报告。
-```
 
 ## 支持的信号
 
@@ -103,7 +99,7 @@ engine-data-analysis/
 │   └── engine_analysis.py            # 核心分析模块
 ├── assets/
 │   └── baseline_engine_database/
-│       └── 260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx  # 对标基准数据库
+│       └── baseline_engine_database.sqlite  # 对标基准数据库
 ├── references/
 │   ├── etas_inca_signals.md          # ETAS INCA 信号命名规范
 │   ├── workflows.md                  # 场景化分析工作流
@@ -120,13 +116,18 @@ GitHub 仓库：[johnhejunlin/skill-engine_data_analysis](https://github.com/joh
 
 ## 更新日志
 
-### 2026-06-08 — feat: implement analyze_combustion_sensitivity (ML)
+### 2026-06-23 — refactor: 标准数据库迁移至 SQLite
+- 将 B15HE 标准数据从 `.xlsx` 迁移至 `.sqlite`（`baseline_engine_database.sqlite`），`load_b15he_standard()` 改用 `sqlite3.connect` + `pd.read_sql`
+- 同步更新 `SKILL.md / README.md / workflows.md / engine_analysis.py` 中的路径引用
+- 修复 `README.md` 的格式问题
+
+### 2026-06-22 — feat: implement analyze_combustion_sensitivity (ML)
 - 实现 `analyze_combustion_sensitivity()` — 7 步 ML 管线（燃烧基线→Pearson+Spearman+互信息→RF→分区→偏依赖→CV→报告生成），sklearn 可选，无 sklearn 自动回退
 - 新增 `_merge_feature_importance()` 5 方法融合排名、`_build_ml_sensitivity_report()` 数据驱动分析报告（markdown 表格）
 - 修复 `_single_engine_performance_core` numpy `or` 崩溃、`max_power_rpm` KeyError、`_merge_feature_importance` fk 脱循环 bug
 - 更新 `COLUMN_PATTERNS` 修复 ETAS INCA 常见误匹配（turbo_speed/spark_act/spark_mbt/imep/wg）
-- SKILL.md 精简场景选择、输出要求，与 workflows.md 去重
-- README.md 更新路径、功能列表、文件结构
+- `SKILL.md` 精简场景选择、输出要求，与 `workflows.md` 去重
+- `README.md` 更新路径、功能列表、文件结构
 
 ### 2026-06-07 — refactor: optimize skill structure
 - 精简 `SKILL.md`，保留触发条件、快速入口和核心工作流
@@ -137,12 +138,12 @@ GitHub 仓库：[johnhejunlin/skill-engine_data_analysis](https://github.com/joh
 
 ### 2026-06-07 — docs: add GitHub publish requirement
 - 记录 skill 的 GitHub 仓库地址
-- 明确每次更新 skill 后需同步更新 README 并上传到 GitHub
+- 明确每次更新 skill 后需同步更新 `README.md` 并上传到 GitHub
 
 ### 2026-06-07 — docs: clarify quick usage scope
-- 将 README 定位从“性能数据分析”调整为“台架数据综合分析”
+- 将`README.md`定位从"性能数据分析"调整为"台架数据综合分析"
 - 重写快速使用示例，按数据识别、A/B 对比、单发动机综合分析和标准对标组织
-- 移除 README 中尚未在脚本实现的一键燃烧敏感性分析声明
+- 移除`README.md`中尚未在脚本实现的一键燃烧敏感性分析声明
 
 ### 2026-06-03 — docs: update file structure for baseline engine database
 - 标准数据文件移入 `baseline engine database/` 子目录
@@ -169,5 +170,6 @@ GitHub 仓库：[johnhejunlin/skill-engine_data_analysis](https://github.com/joh
 
 ### 2026-06-01 — initial: extract reusable module, slim down SKILL.md
 - 将内联代码提取为 `scripts/engine_analysis.py` 结构化模块
-- SKILL.md 精简 71%（35KB → 10KB）
+- `SKILL.md` 精简 71%（35KB → 10KB）
 - 增压器 7 维度加权评分 + 高原能力评估 + 自动列名检测
+

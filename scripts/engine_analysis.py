@@ -2533,7 +2533,7 @@ def single_engine_full_analysis(
 # ────────────────────────────────────────────────────────────
 
 # B15HE 标准数据文件路径 (SKILL assets 目录下的 Excel 文件)
-_B15HE_STANDARD_PATH = Path(__file__).parent.parent / "assets" / "baseline_engine_database" / "260108_B15HE_BSFC_发动机标准数据_v1.0.xlsx"
+_B15HE_STANDARD_PATH = Path(__file__).parent.parent / "assets" / "baseline_engine_database" / "baseline_engine_database.sqlite"
 
 # 外特性列索引映射 (0-based)
 _B15HE_WOT_COL_MAP = {
@@ -2562,19 +2562,14 @@ def load_b15he_standard(sheet: str = "外特性") -> Optional[pd.DataFrame]:
         return None
 
     try:
-        df = pd.read_excel(str(fp), sheet_name=sheet, header=0)
-
-        # 清理列名 (去掉 \\XCP: 1 等后缀)
-        df.columns = [str(c).split("\\")[0].strip() for c in df.columns]
+        import sqlite3
+        conn = sqlite3.connect(str(fp))
+        df = pd.read_sql(f"SELECT * FROM [{sheet}]", conn)
+        conn.close()
 
         if sheet == "外特性":
-            # 外特性: row 0 就是数据 (无单位行)
             return df
         elif sheet == "B15HE万有数据":
-            # 万有数据: row 0 是单位行，需要跳过
-            # 跳过第一行 (单位) 和后续的空行
-            df = df.iloc[1:].copy()
-            df = df.dropna(how="all")
             # 数值化关键列
             rpm_col = df.columns[4]  # DynoSpeed_Avg
             df[rpm_col] = pd.to_numeric(df[rpm_col], errors="coerce")
