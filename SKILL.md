@@ -26,7 +26,6 @@ description: Analyze engine dyno/bench test data — combustion characteristics 
 - 阈值、公式、CSV 处理和列名参考：按需读取 `references/thresholds_and_formulas.md`
 - B15HE 基准数据：`assets/baseline_engine_database/baseline_engine_database.sqlite`
 - 列名检测修复方案：`references/workflows.md`（「常见问题」章节）
-- 增程器功能设计方案（待实施）：`references/rex_design_plan.md`
 
 只在需要对应细节时读取 reference 文件；优先从本文件获得入口和决策路径。
 
